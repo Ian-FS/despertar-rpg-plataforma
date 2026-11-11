@@ -13,6 +13,7 @@ import { salvarFicha, type MudancaFicha } from '../acoes';
 import { AbaFicha } from './aba-ficha';
 import { AbaHabilidades } from './aba-habilidades';
 import { AbaInventario } from './aba-inventario';
+import { AbaLoja } from './aba-loja';
 import { AbaNotas } from './aba-notas';
 
 export interface PropsAba {
@@ -34,6 +35,7 @@ const ABAS = [
   { id: 'ficha', nome: 'Ficha' },
   { id: 'habilidades', nome: 'Habilidades' },
   { id: 'inventario', nome: 'Inventário' },
+  { id: 'loja', nome: 'Loja' },
   { id: 'notas', nome: 'Notas' },
 ] as const;
 type Aba = (typeof ABAS)[number]['id'];
@@ -171,6 +173,7 @@ export function FichaEditor({
         {aba === 'ficha' && <AbaFicha {...props} />}
         {aba === 'habilidades' && <AbaHabilidades {...props} />}
         {aba === 'inventario' && <AbaInventario {...props} />}
+        {aba === 'loja' && <AbaLoja {...props} />}
         {aba === 'notas' && <AbaNotas {...props} />}
 
         {rascunho && (

@@ -77,6 +77,10 @@ export function mesclarEdicaoJogador(antes: Personagem, edicao: unknown): Person
 
 /* ---------------- equipamento ---------------- */
 
+/** Acessórios equipados ao mesmo tempo, por tipo: 2 anéis e 1 de cada outro. */
+export const limiteAcessorio = (tipo: string) => (tipo === 'Anel' ? 2 : 1);
+export const tipoAcessorio = (it: Item) => it.base ?? it.nome;
+
 const duasMaos = (it: Item) => it.cat === 'arma' && /duas mãos/.test(ARMAS.find((a) => a.n === it.base)?.tags ?? '');
 
 /** Conflitos de equipamento pelas regras de armas e escudos (vale para jogador e Mestre). */
@@ -91,6 +95,10 @@ export function conflitosEquipamento(p: Personagem): string[] {
   if (pesada && armas.length > 1) erros.push(`${pesada.nome} é de duas mãos: não dá para empunhar outra arma junto.`);
   if (armas.length > 2) erros.push('No máximo duas armas equipadas (uma em cada mão).');
   if (armas.length === 2 && eq.some((i) => i.cat === 'escudo')) erros.push('Com escudo, só uma arma fica equipada.');
+  const porTipo = new Map<string, number>();
+  for (const i of eq.filter((x) => x.cat === 'acessorio')) porTipo.set(tipoAcessorio(i), (porTipo.get(tipoAcessorio(i)) ?? 0) + 1);
+  for (const [tipo, n] of porTipo)
+    if (n > limiteAcessorio(tipo)) erros.push(`${tipo}: no máximo ${limiteAcessorio(tipo)} equipado(s) ao mesmo tempo.`);
   return erros;
 }
 

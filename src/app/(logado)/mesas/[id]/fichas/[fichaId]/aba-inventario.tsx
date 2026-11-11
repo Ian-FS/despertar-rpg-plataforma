@@ -7,6 +7,8 @@ import { ACESSORIOS, AFIXOS, ARMADURAS, ARMAS, CONSUMIVEIS, RANKS, RARIDADES, SE
 import { brItem } from '@/regras/ficha';
 import { armaComum, armaduraComum, escudoComum, itemBase, type CategoriaItem, type Item } from '@/regras/personagem';
 import { RANK_IDS, type Rank, type RaridadeItem, type TipoArmadura } from '@/regras/tipos';
+import { textoAfixo } from '@/regras/loja';
+import { limiteAcessorio, tipoAcessorio } from '@/regras/validacao';
 import { usarConsumivel } from '../acoes';
 import type { PropsAba } from './ficha-editor';
 
@@ -206,7 +208,7 @@ function LinhaItem({ it, p, alterar, aplicarMudanca, podeEditar, souMestre, fich
                 value=""
                 onChange={(e) => {
                   const a = AFIXOS[cat].find((x) => x.n === e.target.value);
-                  if (a) mudar((i) => void i.afixos.push({ n: a.n, sufixo: a.sufixo, desc: a.desc.replace(/X/g, `X (${i.X})`) }));
+                  if (a) mudar((i) => void i.afixos.push({ n: a.n, sufixo: a.sufixo, desc: textoAfixo(a.desc, i.X) }));
                 }}
               >
                 <option value="">Adicionar afixo…</option>
@@ -390,6 +392,10 @@ function equiparResolvendo(itens: Item[], alvo: Item): string[] {
   if (alvo.cat === 'escudo') {
     eq().filter(ehDuasMaos).forEach(guardar);
     eq().filter((i) => i.cat === 'arma').slice(1).forEach(guardar); // escudo + 1 arma
+  }
+  if (alvo.cat === 'acessorio') {
+    const mesmos = eq().filter((i) => i.cat === 'acessorio' && tipoAcessorio(i) === tipoAcessorio(alvo));
+    mesmos.slice(0, Math.max(0, mesmos.length - limiteAcessorio(tipoAcessorio(alvo)) + 1)).forEach(guardar);
   }
   if (alvo.cat === 'arma') {
     if (ehDuasMaos(alvo)) eq().filter((i) => i.cat === 'arma' || i.cat === 'escudo').forEach(guardar);

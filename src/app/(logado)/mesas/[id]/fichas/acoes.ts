@@ -35,9 +35,11 @@ import type { SorteioAtributos } from '@/regras/criacao';
 import { ARMAS } from '@/regras/dados';
 import { computarFicha, condicoesAtivas, possui } from '@/regras/ficha';
 import { HAB } from '@/regras/dados';
+import { custoUso, PAGA_PM_COM_PV, usosDoDespertar } from '@/regras/despertar-usos';
+import { aplicarCompra, aplicarVenda, precoPedido, validarPedido, type Pedido } from '@/regras/loja';
 import { novoPersonagem, type Personagem } from '@/regras/personagem';
 import { rolar, sortearCrypto, type Rolagem } from '@/regras/rolagem';
-import { ATRIBUTO_IDS, type AtributoId } from '@/regras/tipos';
+import { ATRIBUTO_IDS, RANK_IDS, type AtributoId, type Rank } from '@/regras/tipos';
 import { mesclarEdicaoJogador, normalizarPersonagem, resumoFicha, validarFicha } from '@/regras/validacao';
 
 export interface Resultado {
@@ -305,6 +307,7 @@ export interface MudancaFicha {
   pmAtual: number | null;
   itens: Personagem['itens'];
   condicoes: string;
+  ouro: number;
 }
 
 export interface ResultadoUso extends Resultado {
@@ -313,7 +316,7 @@ export interface ResultadoUso extends Resultado {
   mensagem?: string;
 }
 
-const mudancaDe = (p: Personagem): MudancaFicha => ({ pvAtual: p.pvAtual, pmAtual: p.pmAtual, itens: p.itens, condicoes: p.condicoes });
+const mudancaDe = (p: Personagem): MudancaFicha => ({ pvAtual: p.pvAtual, pmAtual: p.pmAtual, itens: p.itens, condicoes: p.condicoes, ouro: p.ouro });
 
 export async function usarConsumivel(fichaId: string, itemUid: string): Promise<ResultadoUso> {
   return tentar(async () => {
@@ -342,6 +345,31 @@ export async function usarConsumivel(fichaId: string, itemUid: string): Promise<
 }
 
 /** Gasta o PM de uma habilidade ativa. Sem PM suficiente, pode pagar o dobro em PV e ficar Exausto. */
+/**
+ * Paga o custo em PM. Sem PM suficiente: Exaustão de Mana (dobro em PV e fica Exausto), ou,
+ * com a Hemomancia, paga o mesmo valor em PV sem Exaustão. Devolve a mensagem, ou um erro.
+ */
+function pagarPM(p: Personagem, nome: string, custo: number, pagarComPV: boolean): { mensagem?: string; erro?: string } {
+  const f = computarFicha(p);
+  const pm = p.pmAtual ?? f.pmMax;
+  const pv = p.pvAtual ?? f.pvMax;
+  if (custo <= 0) return { mensagem: `${nome}: sem custo de PM.` };
+  if (pm >= custo) {
+    p.pmAtual = pm - custo;
+    return { mensagem: `${nome}: −${custo} PM (${pm} → ${p.pmAtual})` };
+  }
+  if (!pagarComPV) return { erro: `PM insuficiente: ${nome} custa ${custo} PM e você tem ${pm}.` };
+  if (PAGA_PM_COM_PV.has(p.despertar.id)) {
+    p.pvAtual = pv - custo;
+    return { mensagem: `Hemomancia: ${nome} custou ${custo} PV (${pv} → ${p.pvAtual}).` };
+  }
+  p.pvAtual = pv - 2 * custo;
+  const conds = condicoesAtivas(p);
+  if (!conds.includes('Exausto')) p.condicoes = [...conds, 'Exausto'].join(', ');
+  return { mensagem: `Exaustão de Mana: ${nome} custou ${2 * custo} PV (${pv} → ${p.pvAtual}). Você está Exausto.` };
+}
+
+/** Gasta o PM de uma habilidade ativa. */
 export async function usarHabilidade(fichaId: string, habId: string, pagarComPV = false): Promise<ResultadoUso> {
   return tentar(async () => {
     const ctx = await contextoFicha(fichaId);
@@ -349,24 +377,64 @@ export async function usarHabilidade(fichaId: string, habId: string, pagarComPV 
     const h = HAB[habId];
     if (!h || !possui(p, habId)) return { erro: 'Você não tem essa habilidade.' };
     if (h.tipo !== 'Ativa' || !h.pm) return { erro: 'Essa habilidade não gasta PM.' };
-    const f = computarFicha(p);
-    const pm = p.pmAtual ?? f.pmMax;
-    const pv = p.pvAtual ?? f.pvMax;
-    let mensagem: string;
-    if (pm >= h.pm) {
-      p.pmAtual = pm - h.pm;
-      mensagem = `${h.n}: −${h.pm} PM (${pm} → ${p.pmAtual})`;
-    } else if (pagarComPV) {
-      // Exaustão de Mana: paga o dobro do custo em PV e fica Exausto
-      p.pvAtual = pv - 2 * h.pm;
-      const conds = condicoesAtivas(p);
-      if (!conds.includes('Exausto')) p.condicoes = [...conds, 'Exausto'].join(', ');
-      mensagem = `Exaustão de Mana: ${h.n} custou ${2 * h.pm} PV (${pv} → ${p.pvAtual}). Você está Exausto.`;
-    } else {
-      return { erro: `PM insuficiente: ${h.n} custa ${h.pm} PM e você tem ${pm}.` };
-    }
+    const r = pagarPM(p, h.n, h.pm, pagarComPV);
+    if (r.erro) return { erro: r.erro };
     await gravarFicha(fichaId, p);
-    return { mudanca: mudancaDe(p), mensagem };
+    return { mudanca: mudancaDe(p), mensagem: r.mensagem };
+  });
+}
+
+/** Usa um poder do Despertar (custo cadastrado em despertar-usos.ts). */
+export async function usarDespertar(fichaId: string, usoId: string, rank: Rank = 'E', pagarComPV = false): Promise<ResultadoUso> {
+  return tentar(async () => {
+    const ctx = await contextoFicha(fichaId);
+    const p = ctx.p;
+    const uso = usosDoDespertar(p).find((x) => x.id === usoId);
+    if (!uso) return { erro: 'Esse poder não existe no seu Despertar.' };
+    if (!uso.liberado) return { erro: `Ainda bloqueado: ${uso.motivo}.` };
+    if (!RANK_IDS.includes(rank)) return { erro: 'Rank inválido.' };
+    const custo = custoUso(p, uso, rank);
+    const nome = uso.porRank ? `${uso.nome} (Rank ${rank})` : uso.nome;
+    const r = pagarPM(p, nome, custo, pagarComPV);
+    if (r.erro) return { erro: r.erro };
+    await gravarFicha(fichaId, p);
+    return { mudanca: mudancaDe(p), mensagem: r.mensagem };
+  });
+}
+
+/* ---------------- Loja do Sistema ---------------- */
+
+export async function comprarNaLoja(fichaId: string, pedido: Pedido): Promise<ResultadoUso> {
+  return tentar(async () => {
+    const ctx = await contextoFicha(fichaId);
+    const p = ctx.p;
+    const pd: Pedido = {
+      cat: pedido.cat,
+      base: String(pedido.base),
+      rank: pedido.rank,
+      rar: pedido.rar,
+      afixos: Array.isArray(pedido.afixos) ? pedido.afixos.map(String) : [],
+      qtd: pedido.cat === 'consumivel' ? Math.trunc(Number(pedido.qtd) || 1) : undefined,
+    };
+    const erro = validarPedido(p, pd);
+    if (erro) return { erro };
+    const preco = precoPedido(pd);
+    const it = aplicarCompra(p, pd);
+    await gravarFicha(fichaId, p);
+    return { mudanca: mudancaDe(p), mensagem: `Comprado: ${pd.qtd && pd.qtd > 1 ? pd.qtd + '× ' : ''}${it.nome} por ${preco} Ouro.` };
+  });
+}
+
+export async function venderNaLoja(fichaId: string, itemUid: string, qtd = 1): Promise<ResultadoUso> {
+  return tentar(async () => {
+    const ctx = await contextoFicha(fichaId);
+    const p = ctx.p;
+    const it = p.itens.find((i) => i.uid === itemUid);
+    if (!it) return { erro: 'Item não encontrado no inventário.' };
+    const nome = it.nome;
+    const ganho = aplicarVenda(p, itemUid, Math.trunc(Number(qtd) || 1));
+    await gravarFicha(fichaId, p);
+    return { mudanca: mudancaDe(p), mensagem: `Vendido: ${nome} por ${ganho} Ouro.` };
   });
 }
 
