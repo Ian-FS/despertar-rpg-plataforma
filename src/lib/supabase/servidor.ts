@@ -3,10 +3,14 @@
 import 'server-only';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { connection } from 'next/server';
 import { SUPABASE_CHAVE_PUBLICA, SUPABASE_URL } from './config';
 import type { Database } from './tipos-banco';
 
 export async function clienteServidor() {
+  // Tudo que usa o Supabase depende de quem está logado e da hora atual (validade do login),
+  // então só pode rodar no momento do acesso, nunca na pré-renderização.
+  await connection();
   const cookieStore = await cookies();
   return createServerClient<Database>(SUPABASE_URL, SUPABASE_CHAVE_PUBLICA, {
     cookies: {
