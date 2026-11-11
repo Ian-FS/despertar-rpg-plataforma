@@ -1,21 +1,95 @@
 @import "tailwindcss";
 
-/* Visual "janela do Sistema": fundo azul-noite, texto claro, destaque ciano. */
-:root {
-  --background: #0a0f1e;
-  --foreground: #dde6ff;
-  color-scheme: dark;
+/* Visual "janela do Sistema": fundo azul-noite, texto claro, destaque ciano.
+   As cores viram classes do Tailwind: bg-fundo, bg-painel, border-linha, text-sys, text-apagado… */
+@theme {
+  --color-fundo: #0a0f1e;
+  --color-painel: #101935;
+  --color-painel-2: #0d1530;
+  --color-linha: #253663;
+  --color-texto: #dde6ff;
+  --color-apagado: #8d9cc6;
+  --color-sys: #5cc8ff;
+  --color-ouro: #e8b64c;
+  --color-perigo: #ff7070;
+  --color-ok: #5fd39a;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+:root {
+  color-scheme: dark;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-fundo);
+  color: var(--color-texto);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Componentes básicos reutilizáveis */
+@layer components {
+  .janela {
+    border: 1px solid var(--color-sys);
+    background: var(--color-painel-2);
+    box-shadow: 0 0 0 1px rgb(92 200 255 / 0.12), 0 0 32px rgb(92 200 255 / 0.1);
+  }
+  .caixa {
+    border: 1px solid var(--color-linha);
+    background: var(--color-painel);
+  }
+  .rotulo {
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-apagado);
+  }
+  .botao {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 1px solid var(--color-sys);
+    background: rgb(92 200 255 / 0.12);
+    color: var(--color-sys);
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .botao:hover {
+    background: rgb(92 200 255 / 0.22);
+  }
+  .botao:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .botao-discreto {
+    border-color: var(--color-linha);
+    background: transparent;
+    color: var(--color-apagado);
+  }
+  .botao-discreto:hover {
+    color: var(--color-texto);
+    background: rgb(255 255 255 / 0.04);
+  }
+  .campo {
+    background: var(--color-painel-2);
+    border: 1px solid var(--color-linha);
+    color: var(--color-texto);
+    padding: 0.5rem 0.75rem;
+    min-width: 0;
+  }
+  .campo:focus {
+    outline: 2px solid var(--color-sys);
+    outline-offset: -1px;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-sys);
+  outline-offset: 2px;
 }
