@@ -33,9 +33,10 @@ import {
 import type { DadosNivel } from '@/componentes/efeitos/revelacoes';
 import type { SorteioAtributos } from '@/regras/criacao';
 import { ARMAS } from '@/regras/dados';
-import { computarFicha } from '@/regras/ficha';
+import { computarFicha, condicoesAtivas, possui } from '@/regras/ficha';
+import { HAB } from '@/regras/dados';
 import { novoPersonagem, type Personagem } from '@/regras/personagem';
-import { sortearCrypto } from '@/regras/rolagem';
+import { rolar, sortearCrypto, type Rolagem } from '@/regras/rolagem';
 import { ATRIBUTO_IDS, type AtributoId } from '@/regras/tipos';
 import { mesclarEdicaoJogador, normalizarPersonagem, resumoFicha, validarFicha } from '@/regras/validacao';
 
@@ -293,6 +294,79 @@ export async function subirNivelAcao(fichaId: string): Promise<Resultado> {
         acoes: [antes.acoes, depois.acoes],
       },
     };
+  });
+}
+
+/* ---------------- uso em jogo (rolado e aplicado pelo servidor) ---------------- */
+
+/** Campos que o servidor mudou, para a tela atualizar sem perder o rascunho do jogador. */
+export interface MudancaFicha {
+  pvAtual: number | null;
+  pmAtual: number | null;
+  itens: Personagem['itens'];
+  condicoes: string;
+}
+
+export interface ResultadoUso extends Resultado {
+  mudanca?: MudancaFicha;
+  rolagem?: Rolagem;
+  mensagem?: string;
+}
+
+const mudancaDe = (p: Personagem): MudancaFicha => ({ pvAtual: p.pvAtual, pmAtual: p.pmAtual, itens: p.itens, condicoes: p.condicoes });
+
+export async function usarConsumivel(fichaId: string, itemUid: string): Promise<ResultadoUso> {
+  return tentar(async () => {
+    const ctx = await contextoFicha(fichaId);
+    const p = ctx.p;
+    const it = p.itens.find((i) => i.uid === itemUid);
+    if (!it || it.cat !== 'consumivel') return { erro: 'Item não encontrado no inventário.' };
+    if (!it.usoDado || !it.usoAlvo) return { erro: 'Este item não tem efeito automático. Avise o Mestre ao usar.' };
+    const r = rolar(it.usoDado, sortearCrypto);
+    if (!r) return { erro: 'Fórmula do item inválida.' };
+    const f = computarFicha(p);
+    const campo = it.usoAlvo === 'pm' ? 'pmAtual' : 'pvAtual';
+    const max = it.usoAlvo === 'pm' ? f.pmMax : f.pvMax;
+    const atual = p[campo] ?? max;
+    const novo = Math.min(max, atual + r.total);
+    p[campo] = novo;
+    it.qtd = (it.qtd ?? 1) - 1;
+    if (it.qtd <= 0) p.itens = p.itens.filter((i) => i.uid !== itemUid);
+    await gravarFicha(fichaId, p);
+    return {
+      mudanca: mudancaDe(p),
+      rolagem: r,
+      mensagem: `${it.nome}: +${novo - atual} ${it.usoAlvo.toUpperCase()} (${atual} → ${novo})`,
+    };
+  });
+}
+
+/** Gasta o PM de uma habilidade ativa. Sem PM suficiente, pode pagar o dobro em PV e ficar Exausto. */
+export async function usarHabilidade(fichaId: string, habId: string, pagarComPV = false): Promise<ResultadoUso> {
+  return tentar(async () => {
+    const ctx = await contextoFicha(fichaId);
+    const p = ctx.p;
+    const h = HAB[habId];
+    if (!h || !possui(p, habId)) return { erro: 'Você não tem essa habilidade.' };
+    if (h.tipo !== 'Ativa' || !h.pm) return { erro: 'Essa habilidade não gasta PM.' };
+    const f = computarFicha(p);
+    const pm = p.pmAtual ?? f.pmMax;
+    const pv = p.pvAtual ?? f.pvMax;
+    let mensagem: string;
+    if (pm >= h.pm) {
+      p.pmAtual = pm - h.pm;
+      mensagem = `${h.n}: −${h.pm} PM (${pm} → ${p.pmAtual})`;
+    } else if (pagarComPV) {
+      // Exaustão de Mana: paga o dobro do custo em PV e fica Exausto
+      p.pvAtual = pv - 2 * h.pm;
+      const conds = condicoesAtivas(p);
+      if (!conds.includes('Exausto')) p.condicoes = [...conds, 'Exausto'].join(', ');
+      mensagem = `Exaustão de Mana: ${h.n} custou ${2 * h.pm} PV (${pv} → ${p.pvAtual}). Você está Exausto.`;
+    } else {
+      return { erro: `PM insuficiente: ${h.n} custa ${h.pm} PM e você tem ${pm}.` };
+    }
+    await gravarFicha(fichaId, p);
+    return { mudanca: mudancaDe(p), mensagem };
   });
 }
 

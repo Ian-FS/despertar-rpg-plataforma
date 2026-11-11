@@ -1,6 +1,12 @@
-/* O que o jogador pode mudar na própria ficha, e o que só o Mestre ou os sorteios mudam.
-   O servidor chama mesclarEdicaoJogador() e depois validarFicha() antes de gravar. */
-import { HAB } from './dados';
+/* O que o jogador pode mudar na própria ficha, e o que só o Mestre (ou o servidor) muda.
+   O servidor chama mesclarEdicaoJogador() e depois validarFicha() antes de gravar.
+
+   O jogador PODE: nome e textos; distribuir Pontos de Status, gastar PH e pontos de perícia
+   (sem desfazer o que já confirmou); equipar e desequipar; descartar itens; escolher o Título
+   entre os conquistados.
+   Só o MESTRE: PV, PM, condições, descansos, Ouro, criar ou modificar itens, nível, XP, PH extra.
+   Pelo SERVIDOR (ações próprias): usar consumíveis, gastar PM em habilidades, sorteios. */
+import { ARMAS, HAB } from './dados';
 import { checarRequisitos, computarFicha, phDisponiveis } from './ficha';
 import type { HabilidadeAdquirida, Item, Personagem } from './personagem';
 import { ATRIBUTO_IDS, type AtributoId } from './tipos';
@@ -26,15 +32,18 @@ function limparHabs(v: unknown): HabilidadeAdquirida[] {
   return out;
 }
 
-function limparItens(v: unknown): Item[] {
-  if (!Array.isArray(v)) return [];
-  // itens são livres (o jogador registra o que ganha); só limitamos o tamanho
-  return v.slice(0, 300).filter((x) => x && typeof x === 'object') as Item[];
+/** Itens: o jogador só equipa/desequipa e descarta. Itens novos ou alterados são ignorados. */
+function mesclarItens(antes: Item[], edicao: unknown): Item[] {
+  const lista = Array.isArray(edicao) ? edicao.map(objeto) : [];
+  const porUid = new Map(lista.map((o) => [String(o.uid), o]));
+  return antes
+    .filter((it) => porUid.has(it.uid)) // ausente na edição = descartado
+    .map((it) => ({ ...it, equip: porUid.get(it.uid)!.equip === true }));
 }
 
 /**
- * Junta a edição enviada pelo jogador com a ficha atual: campos protegidos (sorteados ou dados
- * pelo Mestre) sempre vêm da ficha atual; os demais vêm da edição, já limpos.
+ * Junta a edição enviada pelo jogador com a ficha atual: campos protegidos sempre vêm da
+ * ficha atual; os demais vêm da edição, já limpos.
  */
 export function mesclarEdicaoJogador(antes: Personagem, edicao: unknown): Personagem {
   const e = objeto(edicao);
@@ -53,37 +62,59 @@ export function mesclarEdicaoJogador(antes: Personagem, edicao: unknown): Person
     ocupacao: texto(e.ocupacao, 80),
     motivo: texto(e.motivo, 500),
     notas: texto(e.notas, 20_000),
-    condicoes: texto(e.condicoes, 500),
-    ouro: inteiro(e.ouro, 0, 1_000_000_000),
-    pvAtual: e.pvAtual === null ? null : inteiro(e.pvAtual, -100_000, 100_000),
-    pmAtual: e.pmAtual === null ? null : inteiro(e.pmAtual, 0, 100_000),
-    itens: limparItens(e.itens),
-    // validados em validarFicha()
+    itens: mesclarItens(antes.itens, e.itens),
+    titulo: texto(e.titulo, 20),
+    // progressão: validada em validarFicha()
     atr: Object.fromEntries(ATRIBUTO_IDS.map((a) => [a, inteiro(atrE[a], 1, 500)])) as Record<AtributoId, number>,
     statusPend: inteiro(e.statusPend, 0, 10_000),
     pericias,
     habs: limparHabs(e.habs),
     despertar: { id: antes.despertar.id, nv: inteiro(despE.nv, 1, 5) },
-    titulo: texto(e.titulo, 20),
-    // protegidos: sempre da ficha atual
-    // (nivel, xp, phNiveis, phExtra, potencial, compPot, compDesp, rankOficial, atrBase, titulosObtidos, bonus)
+    // protegidos (vêm de `antes`): pvAtual, pmAtual, condicoes, ouro, nivel, xp, phNiveis, phExtra,
+    // potencial, compPot, compDesp, rankOficial, atrBase, titulosObtidos, bonus
   };
 }
+
+/* ---------------- equipamento ---------------- */
+
+const duasMaos = (it: Item) => it.cat === 'arma' && /duas mãos/.test(ARMAS.find((a) => a.n === it.base)?.tags ?? '');
+
+/** Conflitos de equipamento pelas regras de armas e escudos (vale para jogador e Mestre). */
+export function conflitosEquipamento(p: Personagem): string[] {
+  const eq = p.itens.filter((i) => i.equip);
+  const armas = eq.filter((i) => i.cat === 'arma');
+  const erros: string[] = [];
+  if (eq.filter((i) => i.cat === 'armadura').length > 1) erros.push('Só uma armadura pode ficar equipada.');
+  if (eq.filter((i) => i.cat === 'escudo').length > 1) erros.push('Só um escudo pode ficar equipado.');
+  const pesada = armas.find(duasMaos);
+  if (pesada && eq.some((i) => i.cat === 'escudo')) erros.push(`${pesada.nome} é de duas mãos: não dá para usar escudo junto.`);
+  if (pesada && armas.length > 1) erros.push(`${pesada.nome} é de duas mãos: não dá para empunhar outra arma junto.`);
+  if (armas.length > 2) erros.push('No máximo duas armas equipadas (uma em cada mão).');
+  if (armas.length === 2 && eq.some((i) => i.cat === 'escudo')) erros.push('Com escudo, só uma arma fica equipada.');
+  return erros;
+}
+
+/* ---------------- validação ---------------- */
 
 /** Confere as regras de uma ficha editada pelo jogador. Devolve a lista de problemas (vazia = ok). */
 export function validarFicha(antes: Personagem, depois: Personagem): string[] {
   const erros: string[] = [];
 
-  // Pontos de Status: o total distribuído + pendente não muda; nenhum atributo abaixo do sorteado
+  // Pontos de Status: o total distribuído + pendente não muda; o que já foi confirmado não volta
   const soma = (p: Personagem) => ATRIBUTO_IDS.reduce((t, a) => t + p.atr[a] - p.atrBase[a], 0) + p.statusPend;
   if (soma(depois) !== soma(antes)) erros.push('Os Pontos de Status distribuídos não batem com os disponíveis.');
   for (const a of ATRIBUTO_IDS)
-    if (depois.atr[a] < depois.atrBase[a]) erros.push(`${a} não pode ficar abaixo do valor sorteado (${depois.atrBase[a]}).`);
+    if (depois.atr[a] < antes.atr[a]) erros.push(`${a}: pontos já confirmados não podem ser retirados (fale com o Mestre).`);
 
-  // Habilidades grátis só vêm da Avaliação do Sistema (ou do Mestre)
+  // Habilidades: grátis só pela Avaliação; o que foi confirmado não diminui nem some
   for (const h of depois.habs)
-    if (h.gratis && !antes.habs.some((x) => x.id === h.id && x.gratis))
-      erros.push(`${HAB[h.id].n} não foi recebida de graça.`);
+    if (h.gratis && !antes.habs.some((x) => x.id === h.id && x.gratis)) erros.push(`${HAB[h.id].n} não foi recebida de graça.`);
+  for (const h of antes.habs) {
+    const agora = depois.habs.find((x) => x.id === h.id);
+    if (!agora) erros.push(`${HAB[h.id].n}: habilidades confirmadas não podem ser removidas (fale com o Mestre).`);
+    else if (agora.nv < h.nv) erros.push(`${HAB[h.id].n}: níveis confirmados não podem ser desfeitos (fale com o Mestre).`);
+  }
+  if (depois.despertar.nv < antes.despertar.nv) erros.push('Níveis do Despertar confirmados não podem ser desfeitos.');
 
   // Habilidades novas precisam cumprir os requisitos
   for (const h of depois.habs) {
@@ -96,18 +127,30 @@ export function validarFicha(antes: Personagem, depois: Personagem): string[] {
   const ph = phDisponiveis(depois);
   if (ph < 0) erros.push(`Faltam ${-ph} PH para essas habilidades.`);
 
-  // Perícias: total e grau máximo pelo nível
+  // Perícias: total, grau máximo do nível, e nada de desfazer o confirmado
   const f = computarFicha(depois);
   const totalPericias = Object.values(depois.pericias).reduce((t, v) => t + v, 0);
-  if (totalPericias > f.periciaTotal)
-    erros.push(`Perícias: ${totalPericias} pontos usados de ${f.periciaTotal} disponíveis.`);
+  if (totalPericias > f.periciaTotal) erros.push(`Perícias: ${totalPericias} pontos usados de ${f.periciaTotal} disponíveis.`);
   for (const [nome, grau] of Object.entries(depois.pericias))
     if (grau > f.periciaMax) erros.push(`${nome}: grau máximo no nível ${depois.nivel} é ${f.periciaMax}.`);
+  for (const [nome, grau] of Object.entries(antes.pericias))
+    if ((depois.pericias[nome] ?? 0) < grau) erros.push(`${nome}: graus confirmados não podem ser retirados.`);
+
+  // Equipamento
+  erros.push(...conflitosEquipamento(depois));
 
   // Título equipado precisa ter sido conquistado
   if (depois.titulo && !depois.titulosObtidos.includes(depois.titulo)) erros.push('Esse Título ainda não foi conquistado.');
 
   return erros;
+}
+
+/** A edição mexe em pontos de progressão (Status, PH, perícias)? Esses pedem confirmação. */
+export function mudouProgressao(a: Personagem, b: Personagem): boolean {
+  return (
+    JSON.stringify([a.atr, a.statusPend, a.habs, a.despertar.nv, a.pericias]) !==
+    JSON.stringify([b.atr, b.statusPend, b.habs, b.despertar.nv, b.pericias])
+  );
 }
 
 /** Resumo público da ficha (o que os outros membros da mesa veem). */

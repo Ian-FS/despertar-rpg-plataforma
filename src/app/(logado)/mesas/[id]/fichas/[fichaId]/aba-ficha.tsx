@@ -123,7 +123,7 @@ function Pendencias({ p, f }: PropsAba) {
 
 /* ---------------- PV, PM, condições, descanso ---------------- */
 
-function VidaMana({ p, f, alterar, podeEditar }: PropsAba) {
+function VidaMana({ p, f, alterar, souMestre }: PropsAba) {
   const efeitos = useEfeitos();
   const pv = p.pvAtual ?? f.pvMax;
   const pm = p.pmAtual ?? f.pmMax;
@@ -162,10 +162,10 @@ function VidaMana({ p, f, alterar, podeEditar }: PropsAba) {
   return (
     <section className="caixa flex flex-col gap-4 p-4">
       <Barra rotulo="PV" atual={pv} max={f.pvMax} cor="bg-ok" alerta={pv <= 0 ? (pv <= -f.pvMax ? 'Morto' : 'Incapacitado') : null} />
-      {podeEditar && <Ajustes onAjuste={(d) => ajustar('pvAtual', pv, d, f.pvMax)} />}
+      {souMestre && <Ajustes onAjuste={(d) => ajustar('pvAtual', pv, d, f.pvMax)} />}
       <Barra rotulo="PM" atual={pm} max={f.pmMax} cor="bg-sys" alerta={null} />
-      {podeEditar && <Ajustes onAjuste={(d) => ajustar('pmAtual', pm, d, f.pmMax)} />}
-      {podeEditar && (
+      {souMestre && <Ajustes onAjuste={(d) => ajustar('pmAtual', pm, d, f.pmMax)} />}
+      {souMestre && (
         <div className="flex flex-wrap gap-2">
           <button className="botao botao-discreto text-sm" onClick={descansoCurto} title="1 hora, até 2 por dia: recupera 1/4 dos PV e PM">
             Descanso curto
@@ -178,13 +178,14 @@ function VidaMana({ p, f, alterar, podeEditar }: PropsAba) {
       <div className="flex flex-col gap-2">
         <span className="rotulo">Condições</span>
         <div className="flex flex-wrap gap-1.5">
-          {CONDICOES.map((c) => {
+          {!souMestre && !condicoes.length && <span className="text-xs text-apagado">Nenhuma.</span>}
+          {CONDICOES.filter((c) => souMestre || condicoes.includes(c.n)).map((c) => {
             const ativa = condicoes.includes(c.n);
             return (
               <button
                 key={c.n}
                 title={c.desc}
-                disabled={!podeEditar}
+                disabled={!souMestre}
                 onClick={() => alternarCondicao(c.n)}
                 className={`border px-2 py-0.5 text-xs ${ativa ? 'border-perigo bg-perigo/15 text-perigo' : 'border-linha text-apagado hover:text-texto'}`}
               >
@@ -202,7 +203,16 @@ function VidaMana({ p, f, alterar, podeEditar }: PropsAba) {
             ))}
           </ul>
         )}
+        {f.efeitosCondicoes.length > 0 && (
+          <p className="text-xs text-ouro">Já aplicado na ficha: {f.efeitosCondicoes.join(' · ')}</p>
+        )}
       </div>
+      {!souMestre && (
+        <p className="text-xs text-apagado">
+          PV, PM, condições e descansos são controlados pelo Mestre. Você recupera com poções (Inventário) e gasta PM ao
+          usar habilidades (Habilidades).
+        </p>
+      )}
     </section>
   );
 }
@@ -274,7 +284,7 @@ function Ajustes({ onAjuste }: { onAjuste: (delta: number) => void }) {
 
 /* ---------------- atributos ---------------- */
 
-function Atributos({ p, f, alterar, podeEditar }: PropsAba) {
+function Atributos({ p, f, salvo, alterar, podeEditar, souMestre }: PropsAba) {
   const rolar = useRolar();
   return (
     <section className="caixa flex flex-col gap-3 p-4">
@@ -289,8 +299,8 @@ function Atributos({ p, f, alterar, podeEditar }: PropsAba) {
             <div key={a.id} className="flex flex-col border border-linha bg-painel-2">
               <button
                 className="flex flex-col p-2 text-left hover:bg-sys/10"
-                onClick={() => rolar(`Teste de ${a.nome}`, d20(f.m[a.id]))}
-                title={`${a.desc} Clique para rolar 1d20${sinal(f.m[a.id])}.`}
+                onClick={() => rolar(`Teste de ${a.nome}`, d20(f.m[a.id] + f.penTeste))}
+                title={`${a.desc} Clique para rolar 1d20${sinal(f.m[a.id] + f.penTeste)}.`}
               >
                 <span className="font-mono text-xs text-apagado">{a.id}</span>
                 <span className="text-2xl font-bold leading-tight">
@@ -299,11 +309,11 @@ function Atributos({ p, f, alterar, podeEditar }: PropsAba) {
                 </span>
                 <span className="font-mono text-sm text-sys">{sinal(f.m[a.id])}</span>
               </button>
-              {podeEditar && (p.statusPend > 0 || p.atr[a.id] > p.atrBase[a.id]) && (
+              {podeEditar && (p.statusPend > 0 || p.atr[a.id] > (souMestre ? p.atrBase[a.id] : salvo.atr[a.id])) && (
                 <div className="flex border-t border-linha text-sm">
                   <button
                     className="flex-1 py-0.5 hover:bg-white/5 disabled:opacity-30"
-                    disabled={p.atr[a.id] <= p.atrBase[a.id]}
+                    disabled={p.atr[a.id] <= (souMestre ? p.atrBase[a.id] : salvo.atr[a.id])}
                     onClick={() => alterar((r) => (r.atr[a.id]--, r.statusPend++))}
                     aria-label={`Tirar ponto de ${a.nome}`}
                   >
@@ -353,9 +363,18 @@ function Combate({ f }: PropsAba) {
   return (
     <section className="caixa flex flex-col gap-3 p-4">
       <h2 className="rotulo">Combate</h2>
+      {f.semReacao && (
+        <p className="border border-perigo/60 bg-perigo/10 px-3 py-2 text-sm text-perigo">
+          Pelas suas condições, você não pode usar Reações agora (Defender, Esquivar).
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Valor rotulo="Defender" valor={sinal(f.def)} sub="Nível + FOR + armadura + escudo" onRolar={() => rolar('Reação: Defender', d20(f.def))} />
-        <Valor rotulo="Esquivar" valor={sinal(f.esq)} sub="Nível + AGI − penalidade" onRolar={() => rolar('Reação: Esquivar', d20(f.esq))} />
+        {f.semEsquiva ? (
+          <Valor rotulo="Esquivar" valor="—" sub="não pode Esquivar (Imobilizado)" />
+        ) : (
+          <Valor rotulo="Esquivar" valor={sinal(f.esq)} sub="Nível + AGI − penalidade" onRolar={() => rolar('Reação: Esquivar', d20(f.esq))} />
+        )}
         <Valor rotulo="Iniciativa" valor={sinal(f.ini)} onRolar={() => rolar('Iniciativa', d20(f.ini))} />
         <Valor rotulo="Defesa Passiva" valor={String(f.defPassiva)} sub="quando não percebe o ataque" />
         <Valor rotulo="RD" valor={String(f.rd)} sub={f.rdFisico ? `+${f.rdFisico} só contra físico` : 'reduz cada acerto'} />
@@ -425,7 +444,7 @@ const dobrarDados = (dado: string) => dado.replace(/(\d*)d(\d+)/g, (_, q, fc) =>
 
 /* ---------------- perícias ---------------- */
 
-function Pericias({ p, f, alterar, podeEditar }: PropsAba) {
+function Pericias({ p, f, salvo, alterar, podeEditar, souMestre }: PropsAba) {
   const rolar = useRolar();
   const usados = Object.values(p.pericias).reduce((t, v) => t + v, 0);
   return (
@@ -455,7 +474,7 @@ function Pericias({ p, f, alterar, podeEditar }: PropsAba) {
               )}
               {podeEditar && (
                 <span className="flex items-center gap-1 font-mono text-xs">
-                  <button className="px-1 disabled:opacity-30" disabled={grau <= 0} onClick={() => alterar((r) => void (r.pericias[pc.n] = grau - 1))} aria-label={`Diminuir ${pc.n}`}>
+                  <button className="px-1 disabled:opacity-30" disabled={grau <= (souMestre ? 0 : (salvo.pericias[pc.n] ?? 0))} onClick={() => alterar((r) => void (r.pericias[pc.n] = grau - 1))} aria-label={`Diminuir ${pc.n}`}>
                     −
                   </button>
                   <span className="w-3 text-center">{grau}</span>

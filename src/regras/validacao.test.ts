@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { aplicarAtributos, aplicarAvaliacao, aplicarDespertar, despertarDoD100 } from './criacao';
-import { mesclarEdicaoJogador, validarFicha } from './validacao';
-import { novoPersonagem, type Personagem } from './personagem';
+import { conflitosEquipamento, mesclarEdicaoJogador, mudouProgressao, validarFicha } from './validacao';
+import { armaComum, escudoComum, itemBase, novoPersonagem, type Personagem } from './personagem';
 
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 
@@ -47,7 +47,7 @@ describe('edição do jogador', () => {
     b.atr.FOR = 13;
     b.atr.AGI = 20;
     b.statusPend = 3;
-    expect(validarFicha(antes, mesclarEdicaoJogador(antes, b)).join()).toMatch(/FOR não pode ficar abaixo/);
+    expect(validarFicha(antes, mesclarEdicaoJogador(antes, b)).join()).toMatch(/FOR: pontos já confirmados não podem ser retirados/);
   });
 
   it('habilidade grátis só pela Avaliação; requisitos e PH são conferidos', () => {
@@ -80,5 +80,60 @@ describe('edição do jogador', () => {
     expect(validarFicha(antes, mesclarEdicaoJogador(antes, e)).join()).toMatch(/Título/);
     antes.titulosObtidos = ['t01'];
     expect(validarFicha(antes, mesclarEdicaoJogador(antes, e))).toEqual([]);
+  });
+});
+
+describe('controle do Mestre', () => {
+  it('PV, PM, condições e Ouro não mudam pela edição do jogador', () => {
+    const antes = rafaSorteada();
+    const e = { ...clone(antes), pvAtual: 999, pmAtual: 999, condicoes: '', ouro: 1_000_000 };
+    antes.condicoes = 'Envenenado';
+    const depois = mesclarEdicaoJogador(antes, e);
+    expect([depois.pvAtual, depois.pmAtual, depois.condicoes, depois.ouro]).toEqual([null, null, 'Envenenado', 100]);
+  });
+
+  it('itens: o jogador só equipa, desequipa e descarta', () => {
+    const antes = rafaSorteada();
+    const e = clone(antes);
+    const [adaga, traje, pocao] = e.itens;
+    adaga.equip = false;
+    adaga.rank = 'S';
+    adaga.refino = 10;
+    adaga.afixos = [{ n: 'Brutal', desc: '' }];
+    e.itens = [adaga, traje, itemBase('arma', 'Espada lendária criada do nada')];
+    void pocao; // descartada
+    const depois = mesclarEdicaoJogador(antes, e);
+    expect(depois.itens).toHaveLength(2);
+    expect(depois.itens[0]).toMatchObject({ equip: false, rank: 'E', refino: 0, afixos: [] });
+  });
+
+  it('não dá para desfazer habilidade, nível ou perícia já confirmados', () => {
+    const antes = rafaSorteada();
+    antes.habs.push({ id: 'vul1', nv: 2, gratis: false });
+    antes.pericias = { Furtividade: 1 };
+    const e = clone(antes);
+    e.habs = e.habs.filter((h) => h.id !== 'vul1');
+    e.pericias = {};
+    const erros = validarFicha(antes, mesclarEdicaoJogador(antes, e)).join(' | ');
+    expect(erros).toMatch(/Passos Silenciosos: habilidades confirmadas não podem ser removidas/);
+    expect(erros).toMatch(/Furtividade: graus confirmados não podem ser retirados/);
+  });
+
+  it('mudouProgressao separa pontos (pedem confirmação) de anotações', () => {
+    const a = rafaSorteada();
+    expect(mudouProgressao(a, { ...clone(a), notas: 'oi' })).toBe(false);
+    expect(mudouProgressao(a, { ...clone(a), statusPend: 0 })).toBe(true);
+  });
+});
+
+describe('equipamento', () => {
+  it('duas mãos não combina com escudo nem com outra arma; máximo de duas armas', () => {
+    const p = novoPersonagem('Espada Pesada');
+    p.itens.push(Object.assign(escudoComum(), { equip: true }));
+    expect(conflitosEquipamento(p).join()).toMatch(/duas mãos: não dá para usar escudo/);
+    p.itens = [Object.assign(armaComum('Adaga'), { equip: true }), Object.assign(armaComum('Espada Curta'), { equip: true })];
+    expect(conflitosEquipamento(p)).toEqual([]);
+    p.itens.push(Object.assign(armaComum('Espada'), { equip: true }));
+    expect(conflitosEquipamento(p).join()).toMatch(/No máximo duas armas/);
   });
 });

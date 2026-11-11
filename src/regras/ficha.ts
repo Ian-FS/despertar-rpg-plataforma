@@ -129,6 +129,15 @@ export interface FichaCalculada {
   xpProx: number;
   periciaMax: number;
   periciaTotal: number;
+  /** condições ativas e o que elas mudaram */
+  condicoes: string[];
+  efeitosCondicoes: string[];
+  /** penalidade nos testes de atributo (Amedrontado, Exausto) */
+  penTeste: number;
+  /** não pode usar Reações (Atordoado, Incapacitado, Inconsciente, Surpreso; Cego, salvo adjacente) */
+  semReacao: boolean;
+  /** não pode Esquivar (Imobilizado) */
+  semEsquiva: boolean;
 }
 
 export function computarFicha(p: Personagem): FichaCalculada {
@@ -212,7 +221,7 @@ export function computarFicha(p: Personagem): FichaCalculada {
     });
   }
 
-  return {
+  return aplicarCondicoes(p, {
     nivel: n,
     rank: rankDoNivel(n),
     atr,
@@ -236,7 +245,89 @@ export function computarFicha(p: Personagem): FichaCalculada {
     xpProx: n * 10,
     periciaMax: 2 + Math.floor(n / 2),
     periciaTotal: 4 + 2 * (n - 1),
-  };
+    condicoes: [],
+    efeitosCondicoes: [],
+    penTeste: 0,
+    semReacao: false,
+    semEsquiva: false,
+  });
+}
+
+/* ---------------- condições (capítulo 7) ---------------- */
+
+export const condicoesAtivas = (p: Personagem) =>
+  (p.condicoes || '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+
+/** Aplica nos números as condições que têm efeito fixo. */
+function aplicarCondicoes(p: Personagem, f: FichaCalculada): FichaCalculada {
+  const c = new Set(condicoesAtivas(p));
+  const efeitos: string[] = [];
+  const somarAtaques = (v: number, soCaC = false) =>
+    f.ataques.forEach((a) => {
+      if (!soCaC || !a.dist) a.atk += v;
+    });
+  const somarPericias = (v: number) => Object.keys(f.per).forEach((k) => (f.per[k] += v));
+  const somarRes = (v: number) => (Object.keys(f.res) as AtributoId[]).forEach((k) => (f.res[k] += v));
+
+  if (c.has('Agarrado')) {
+    somarAtaques(-2);
+    f.desl = 0;
+    efeitos.push('Agarrado: −2 em ataques, deslocamento 0');
+  }
+  if (c.has('Amedrontado')) {
+    somarAtaques(-2);
+    somarPericias(-2);
+    f.penTeste -= 2;
+    efeitos.push('Amedrontado: −2 em ataques e testes');
+  }
+  if (c.has('Cego')) {
+    somarAtaques(-5);
+    f.semReacao = true;
+    efeitos.push('Cego: −5 em ataques; só Reage a adjacentes com Percepção CD 15');
+  }
+  if (c.has('Derrubado')) {
+    somarAtaques(-4, true);
+    f.esq -= 4;
+    efeitos.push('Derrubado: −4 em corpo a corpo e em Esquivar');
+  }
+  if (c.has('Envenenado')) {
+    f.res.VIT -= 2;
+    efeitos.push('Envenenado: −2 em Resistências de VIT');
+  }
+  if (c.has('Exausto')) {
+    somarPericias(-2);
+    somarRes(-2);
+    f.penTeste -= 2;
+    f.desl /= 2;
+    efeitos.push('Exausto: −2 em todos os testes, deslocamento pela metade');
+  }
+  if (c.has('Imobilizado')) {
+    f.desl = 0;
+    f.semEsquiva = true;
+    efeitos.push('Imobilizado: deslocamento 0, não pode Esquivar');
+  }
+  if (c.has('Lento')) {
+    f.desl /= 2;
+    f.acoes = Math.max(1, f.acoes - 1);
+    efeitos.push('Lento: deslocamento pela metade, −1 Ação Principal');
+  }
+  if (c.has('Atordoado')) {
+    f.acoes = 1;
+    f.semReacao = true;
+    efeitos.push('Atordoado: sem Reações nem Ações Especiais; só uma Ação Principal ou de Movimento');
+  }
+  for (const x of ['Incapacitado', 'Inconsciente', 'Surpreso']) {
+    if (!c.has(x)) continue;
+    f.semReacao = true;
+    efeitos.push(`${x}: não age nem reage`);
+  }
+
+  f.condicoes = [...c];
+  f.efeitosCondicoes = efeitos;
+  return f;
 }
 
 /* ---------------- Pontos de Habilidade ---------------- */

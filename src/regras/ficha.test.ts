@@ -285,3 +285,48 @@ describe('requisitos de habilidade', () => {
     expect(custoProximo(hab('Cura').id, p)).toBe(1);
   });
 });
+
+describe('condições mudam os números (capítulo 7)', () => {
+  const base = () => {
+    const p = novoPersonagem('Espada');
+    p.itens.push(Object.assign(armaComum('Arco'), { equip: true }));
+    p.atr = { FOR: 14, AGI: 14, VIT: 14, INT: 10, PER: 10, PRE: 10 };
+    return p;
+  };
+
+  it('sem condições, nada muda', () => {
+    const f = computarFicha(base());
+    expect([f.desl, f.acoes, f.semReacao, f.semEsquiva, f.penTeste]).toEqual([10, 1, false, false, 0]);
+  });
+
+  it('Derrubado: −4 só em corpo a corpo e em Esquivar', () => {
+    const p = base();
+    const antes = computarFicha(p);
+    p.condicoes = 'Derrubado';
+    const f = computarFicha(p);
+    expect(f.ataques.find((a) => a.nome === 'Espada')!.atk).toBe(antes.ataques.find((a) => a.nome === 'Espada')!.atk - 4);
+    expect(f.ataques.find((a) => a.nome === 'Arco')!.atk).toBe(antes.ataques.find((a) => a.nome === 'Arco')!.atk);
+    expect(f.esq).toBe(antes.esq - 4);
+  });
+
+  it('Exausto e Lento: deslocamento pela metade cada; Lento tira uma ação (mínimo 1)', () => {
+    const p = base();
+    p.nivel = 5; // 2 ações
+    p.condicoes = 'Exausto, Lento';
+    const f = computarFicha(p);
+    expect(f.desl).toBe(2.5);
+    expect(f.acoes).toBe(1);
+    expect(f.per.Atletismo).toBe(2 - 2);
+    expect(f.penTeste).toBe(-2);
+  });
+
+  it('Imobilizado, Atordoado, Envenenado e Cego', () => {
+    const p = base();
+    p.condicoes = 'Imobilizado, Atordoado, Envenenado, Cego';
+    const f = computarFicha(p);
+    expect([f.desl, f.semEsquiva, f.semReacao, f.acoes]).toEqual([0, true, true, 1]);
+    expect(f.res.VIT).toBe(1 + 2 - 2);
+    expect(f.ataques[0].atk).toBe(1 + 2 - 5);
+    expect(f.efeitosCondicoes).toHaveLength(4);
+  });
+});

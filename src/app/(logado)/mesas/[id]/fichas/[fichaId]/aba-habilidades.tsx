@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { CartaoDespertar, CartaoHabilidade, COR_RANK } from '@/componentes/cartoes';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { ARVORES, DESP, HAB, HABILIDADES } from '@/regras/dados';
@@ -15,6 +15,7 @@ import {
   possui,
 } from '@/regras/ficha';
 import { RANK_IDS, type ArvoreId, type Habilidade } from '@/regras/tipos';
+import { usarHabilidade } from '../acoes';
 import type { PropsAba } from './ficha-editor';
 
 /** Aviso do Sistema ao evoluir: mostra o marco dos níveis 3 e 5. */
@@ -46,7 +47,7 @@ export function AbaHabilidades(props: PropsAba) {
   );
 }
 
-function Despertar({ p, alterar, podeEditar }: PropsAba) {
+function Despertar({ p, salvo, alterar, podeEditar, souMestre }: PropsAba) {
   const efeitos = useEfeitos();
   const x = DESP[p.despertar.id];
   if (!x) return null;
@@ -65,7 +66,7 @@ function Despertar({ p, alterar, podeEditar }: PropsAba) {
               Evoluir para nv {nv + 1} · {custo ? `${custo} PH` : 'grátis'}
             </button>
           )}
-          {podeEditar && nv > 1 && (
+          {podeEditar && nv > (souMestre ? 1 : salvo.despertar.nv) && (
             <button className="botao botao-discreto px-3 py-1 text-sm" onClick={() => alterar((r) => void r.despertar.nv--)}>
               Desfazer nível
             </button>
@@ -76,7 +77,7 @@ function Despertar({ p, alterar, podeEditar }: PropsAba) {
   );
 }
 
-function Minhas({ p, alterar, podeEditar }: PropsAba) {
+function Minhas({ p, salvo, alterar, aplicarMudanca, podeEditar, souMestre, fichaId }: PropsAba) {
   const [aberta, setAberta] = useState<string | null>(null);
   const efeitos = useEfeitos();
   if (!p.habs.length)
@@ -104,6 +105,9 @@ function Minhas({ p, alterar, podeEditar }: PropsAba) {
                   </span>
                 </button>
                 <span className="font-mono text-sm">nv {x.nv}</span>
+                {podeEditar && h.tipo === 'Ativa' && h.pm > 0 && salvo.habs.some((y) => y.id === x.id) && (
+                  <BotaoUsar fichaId={fichaId} habId={x.id} pm={h.pm} aplicarMudanca={aplicarMudanca} />
+                )}
                 {podeEditar && x.nv < 5 && (
                   <button
                     className="botao px-2 py-0.5 text-xs"
@@ -113,12 +117,12 @@ function Minhas({ p, alterar, podeEditar }: PropsAba) {
                     nv {x.nv + 1} · {x.nv + 1} PH
                   </button>
                 )}
-                {podeEditar && x.nv > 1 && (
+                {podeEditar && x.nv > (souMestre ? 1 : (salvo.habs.find((y) => y.id === x.id)?.nv ?? 1)) && (
                   <button className="botao botao-discreto px-2 py-0.5 text-xs" onClick={() => alterar((r) => void r.habs.find((y) => y.id === x.id)!.nv--)}>
                     −nv
                   </button>
                 )}
-                {podeEditar && !x.gratis && x.nv === 1 && (
+                {podeEditar && !x.gratis && x.nv === 1 && (souMestre || !salvo.habs.some((y) => y.id === x.id)) && (
                   <button className="botao botao-discreto px-2 py-0.5 text-xs" onClick={() => alterar((r) => void (r.habs = r.habs.filter((y) => y.id !== x.id)))}>
                     Remover
                   </button>
@@ -251,5 +255,44 @@ function Comprar({ h, p, ph, podeEditar, onComprar }: { h: Habilidade; p: PropsA
         )
       )}
     </div>
+  );
+}
+
+/** Usa a habilidade ativa: o servidor desconta o PM. Sem PM, oferece a Exaustão de Mana. */
+function BotaoUsar({ fichaId, habId, pm, aplicarMudanca }: { fichaId: string; habId: string; pm: number; aplicarMudanca: PropsAba['aplicarMudanca'] }) {
+  const efeitos = useEfeitos();
+  const [pendente, iniciar] = useTransition();
+  const [semPM, setSemPM] = useState<string | null>(null);
+  const usar = (comPV: boolean) =>
+    iniciar(async () => {
+      const r = await usarHabilidade(fichaId, habId, comPV);
+      if (r.erro) {
+        efeitos.som('falha');
+        if (/PM insuficiente/.test(r.erro)) setSemPM(r.erro);
+        else efeitos.aviso(r.erro, 'perigo');
+        return;
+      }
+      setSemPM(null);
+      if (r.mudanca) aplicarMudanca(r.mudanca);
+      efeitos.som(comPV ? 'dano' : 'sistema');
+      efeitos.aviso(`[ SISTEMA ] ${r.mensagem}`, comPV ? 'perigo' : 'sys');
+    });
+
+  if (semPM)
+    return (
+      <span className="flex w-full flex-wrap items-center gap-2 border border-perigo/60 bg-perigo/10 px-2 py-1 text-xs text-perigo">
+        {semPM} Exaustão de Mana: pagar {2 * pm} PV e ficar Exausto?
+        <button className="botao border-perigo bg-transparent px-2 py-0.5 text-xs text-perigo" disabled={pendente} onClick={() => usar(true)}>
+          Pagar com PV
+        </button>
+        <button className="botao botao-discreto px-2 py-0.5 text-xs" onClick={() => setSemPM(null)}>
+          Cancelar
+        </button>
+      </span>
+    );
+  return (
+    <button className="botao px-2 py-0.5 text-xs" disabled={pendente} onClick={() => usar(false)} title="Desconta o PM da habilidade">
+      Usar · {pm} PM
+    </button>
   );
 }

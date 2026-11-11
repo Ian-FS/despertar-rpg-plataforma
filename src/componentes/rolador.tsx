@@ -1,6 +1,6 @@
 'use client';
 /* Rolagens rápidas da ficha. Por enquanto locais (só você vê); na Fase 2 vão para o histórico da mesa. */
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { NumeroGirando } from '@/componentes/efeitos/numero-girando';
 import { useAnimar } from '@/componentes/efeitos/preferencias';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
@@ -14,9 +14,13 @@ interface Entrada {
 }
 
 type Rolar = (rotulo: string, formula: string, opcoes?: { margemCritico?: number }) => Rolagem | null;
+type Mostrar = (rotulo: string, r: Rolagem, opcoes?: { margemCritico?: number }) => void;
 
-const Ctx = createContext<Rolar>(() => null);
-export const useRolar = () => useContext(Ctx);
+const Ctx = createContext<{ rolar: Rolar; mostrar: Mostrar }>({ rolar: () => null, mostrar: () => {} });
+/** Rola no navegador e mostra o resultado. */
+export const useRolar = () => useContext(Ctx).rolar;
+/** Mostra uma rolagem feita no servidor (poções, sorteios). */
+export const useMostrarRolagem = () => useContext(Ctx).mostrar;
 
 let seq = 0;
 const GIRO = 520;
@@ -29,23 +33,30 @@ export function Rolador({ children }: { children: React.ReactNode }) {
   const efeitos = useEfeitos();
   const animar = useAnimar();
 
-  const rolarFn = useCallback<Rolar>(
-    (rotulo, formula, opcoes) => {
-      const r = rolar(formula);
-      if (!r) return null;
+  const mostrar = useCallback<Mostrar>(
+    (rotulo, r, opcoes) => {
       const margemCritico = opcoes?.margemCritico ?? 20;
       setLista((l) => [{ id: ++seq, rotulo, r, margemCritico }, ...l].slice(0, 4));
       efeitos.som('dado');
       const nat = d20Natural(r);
       const especial = ehCritico(r, margemCritico) ? 'critico' : nat === 1 ? 'falha' : null;
       if (especial) setTimeout(() => efeitos.som(especial), animar ? GIRO : 0);
-      return r;
     },
     [efeitos, animar],
   );
 
+  const rolarFn = useCallback<Rolar>(
+    (rotulo, formula, opcoes) => {
+      const r = rolar(formula);
+      if (r) mostrar(rotulo, r, opcoes);
+      return r;
+    },
+    [mostrar],
+  );
+  const valor = useMemo(() => ({ rolar: rolarFn, mostrar }), [rolarFn, mostrar]);
+
   return (
-    <Ctx.Provider value={rolarFn}>
+    <Ctx.Provider value={valor}>
       {children}
       <div
         aria-live="polite"

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
-import { useRolar } from '@/componentes/rolador';
+import { useMostrarRolagem, useRolar } from '@/componentes/rolador';
 import { ACESSORIOS, AFIXOS, ARMADURAS, ARMAS, CONSUMIVEIS, RANKS, RARIDADES, SELOS } from '@/regras/dados';
 import { brItem } from '@/regras/ficha';
 import { armaComum, armaduraComum, escudoComum, itemBase, type CategoriaItem, type Item } from '@/regras/personagem';
 import { RANK_IDS, type Rank, type RaridadeItem, type TipoArmadura } from '@/regras/tipos';
+import { usarConsumivel } from '../acoes';
 import type { PropsAba } from './ficha-editor';
 
 const LIMITE = 20;
@@ -22,7 +23,7 @@ const corRaridade = (r: RaridadeItem) => RARIDADES.find((x) => x.n === r)?.cor ?
 const catAfixo = (c: CategoriaItem) => (c === 'arma' ? 'arma' : c === 'armadura' || c === 'escudo' ? 'armadura' : c === 'acessorio' ? 'acessorio' : null);
 
 export function AbaInventario(props: PropsAba) {
-  const { p, alterar, podeEditar } = props;
+  const { p, alterar, souMestre } = props;
   const mudarItem = (uid: string, fn: (it: Item) => void) =>
     alterar((r) => {
       const it = r.itens.find((i) => i.uid === uid);
@@ -45,7 +46,8 @@ export function AbaInventario(props: PropsAba) {
             min={0}
             className="campo w-32 text-right font-mono"
             value={p.ouro}
-            disabled={!podeEditar}
+            disabled={!souMestre}
+            title={souMestre ? undefined : 'O Ouro é controlado pelo Mestre'}
             onChange={(e) => alterar((r) => void (r.ouro = Math.max(0, Math.trunc(Number(e.target.value) || 0))))}
           />
         </label>
@@ -55,35 +57,42 @@ export function AbaInventario(props: PropsAba) {
           <LinhaItem key={it.uid} it={it} {...props} mudar={(fn) => mudarItem(it.uid, fn)} />
         ))}
       </ul>
-      {podeEditar && <NovoItem onAdicionar={(it) => alterar((r) => void r.itens.push(it))} />}
+      {souMestre ? (
+        <NovoItem onAdicionar={(it) => alterar((r) => void r.itens.push(it))} />
+      ) : (
+        <p className="text-xs text-apagado">Itens novos, Refino, afixos e Ouro são dados pelo Mestre. Você pode equipar, usar consumíveis e descartar.</p>
+      )}
     </div>
   );
 }
 
-function LinhaItem({ it, p, f, alterar, podeEditar, mudar }: PropsAba & { it: Item; mudar: (fn: (it: Item) => void) => void }) {
+function LinhaItem({ it, p, alterar, aplicarMudanca, podeEditar, souMestre, fichaId, mudar }: PropsAba & { it: Item; mudar: (fn: (it: Item) => void) => void }) {
   const rolar = useRolar();
   const efeitos = useEfeitos();
 
   /** usa o consumível: rola, aplica em PV ou PM e gasta uma unidade */
+  const mostrar = useMostrarRolagem();
+  const [usando, iniciar] = useTransition();
+  const [descartando, setDescartando] = useState(false);
+
+  /** o servidor rola, aplica em PV/PM e gasta uma unidade */
   const usar = () => {
-    const r = rolar(it.nome, it.usoDado!);
-    if (!r) return;
-    const alvo = it.usoAlvo;
-    if (!podeEditar || !alvo) return;
-    const campo = alvo === 'pm' ? 'pmAtual' : 'pvAtual';
-    const max = alvo === 'pm' ? f.pmMax : f.pvMax;
-    const atual = p[campo] ?? max;
-    const novo = Math.min(max, atual + r.total);
-    alterar((x) => {
-      x[campo] = novo;
-      const item = x.itens.find((i) => i.uid === it.uid);
-      if (item) {
-        item.qtd = (item.qtd ?? 1) - 1;
-        if (item.qtd <= 0) x.itens = x.itens.filter((i) => i.uid !== it.uid);
+    if (!podeEditar || !it.usoAlvo) {
+      rolar(it.nome, it.usoDado!);
+      return;
+    }
+    iniciar(async () => {
+      const r = await usarConsumivel(fichaId, it.uid);
+      if (r.erro) {
+        efeitos.som('falha');
+        efeitos.aviso(r.erro, 'perigo');
+        return;
       }
+      if (r.rolagem) mostrar(it.nome, r.rolagem);
+      if (r.mudanca) aplicarMudanca(r.mudanca);
+      efeitos.som('cura');
+      efeitos.aviso(`[ SISTEMA ] ${r.mensagem}`, 'ok');
     });
-    efeitos.som('cura');
-    efeitos.aviso(`[ SISTEMA ] ${it.nome}: +${novo - atual} ${alvo.toUpperCase()} (${atual} → ${novo})`, 'ok');
   };
   const [aberto, setAberto] = useState(false);
   const { br, rank, semReq } = brItem(it, p);
@@ -94,10 +103,13 @@ function LinhaItem({ it, p, f, alterar, podeEditar, mudar }: PropsAba & { it: It
     efeitos.som('clique');
     alterar((r) => {
       const alvo = r.itens.find((i) => i.uid === it.uid)!;
-      // só uma armadura e um escudo equipados por vez
-      if (!alvo.equip && (alvo.cat === 'armadura' || alvo.cat === 'escudo'))
-        r.itens.forEach((i) => i.cat === alvo.cat && (i.equip = false));
-      alvo.equip = !alvo.equip;
+      if (alvo.equip) {
+        alvo.equip = false;
+        return;
+      }
+      // resolve conflitos sozinho: guarda o que não cabe junto com o item novo
+      const guardados = equiparResolvendo(r.itens, alvo);
+      if (guardados.length) efeitos.aviso(`Guardado para equipar ${alvo.nome}: ${guardados.join(', ')}`);
     });
   };
 
@@ -118,7 +130,7 @@ function LinhaItem({ it, p, f, alterar, podeEditar, mudar }: PropsAba & { it: It
           </span>
         </button>
         {it.usoDado && (
-          <button className="botao botao-discreto px-2 py-0.5 text-xs" onClick={usar} title={it.usoAlvo ? `Rola ${it.usoDado}, recupera ${it.usoAlvo.toUpperCase()} e gasta 1 unidade` : undefined}>
+          <button className="botao botao-discreto px-2 py-0.5 text-xs" disabled={usando} onClick={usar} title={it.usoAlvo ? `Rola ${it.usoDado}, recupera ${it.usoAlvo.toUpperCase()} e gasta 1 unidade` : undefined}>
             Usar · {it.usoDado}
           </button>
         )}
@@ -150,7 +162,7 @@ function LinhaItem({ it, p, f, alterar, podeEditar, mudar }: PropsAba & { it: It
               {it.selos.length} Selo(s) oculto(s) · Sincronia {it.sinc} (despertam com 3, 8 e 15)
             </p>
           )}
-          {podeEditar && (
+          {souMestre && (
             <div className="flex flex-wrap items-end gap-3">
               <Campo id={`rk-${it.uid}`} rotulo="Rank">
                 <select id={`rk-${it.uid}`} className="campo" value={it.rank} onChange={(e) => mudar((i) => ((i.rank = e.target.value as Rank), (i.X = 1 + RANKS[i.rank].br)))}>
@@ -183,7 +195,7 @@ function LinhaItem({ it, p, f, alterar, podeEditar, mudar }: PropsAba & { it: It
               )}
             </div>
           )}
-          {podeEditar && cat && (
+          {souMestre && cat && (
             <div className="flex flex-wrap items-center gap-2">
               <label htmlFor={`afx-${it.uid}`} className="text-xs text-apagado">
                 Afixo (X = {it.X})
@@ -229,11 +241,22 @@ function LinhaItem({ it, p, f, alterar, podeEditar, mudar }: PropsAba & { it: It
               )}
             </div>
           )}
-          {podeEditar && (
-            <button className="self-start text-xs text-perigo underline" onClick={() => alterar((r) => void (r.itens = r.itens.filter((i) => i.uid !== it.uid)))}>
-              Descartar item
-            </button>
-          )}
+          {podeEditar &&
+            (descartando ? (
+              <span className="flex flex-wrap items-center gap-2 text-xs">
+                Descartar {it.nome}? Não dá para desfazer.
+                <button className="botao border-perigo bg-transparent px-2 py-0.5 text-xs text-perigo" onClick={() => alterar((r) => void (r.itens = r.itens.filter((i) => i.uid !== it.uid)))}>
+                  Descartar
+                </button>
+                <button className="botao botao-discreto px-2 py-0.5 text-xs" onClick={() => setDescartando(false)}>
+                  Cancelar
+                </button>
+              </span>
+            ) : (
+              <button className="self-start text-xs text-perigo underline" onClick={() => setDescartando(true)}>
+                Descartar item
+              </button>
+            ))}
         </div>
       )}
     </li>
@@ -349,4 +372,33 @@ function Campo({ id, rotulo, children }: { id: string; rotulo: string; children:
       {children}
     </div>
   );
+}
+
+const ehDuasMaos = (i: Item) => i.cat === 'arma' && /duas mãos/.test(ARMAS.find((a) => a.n === i.base)?.tags ?? '');
+
+/** Equipa `alvo` desequipando o que conflita (armadura/escudo repetidos, duas mãos, mãos cheias). */
+function equiparResolvendo(itens: Item[], alvo: Item): string[] {
+  const guardados: string[] = [];
+  const guardar = (i: Item) => {
+    if (i.equip && i.uid !== alvo.uid) {
+      i.equip = false;
+      guardados.push(i.nome);
+    }
+  };
+  const eq = () => itens.filter((i) => i.equip && i.uid !== alvo.uid);
+  if (alvo.cat === 'armadura' || alvo.cat === 'escudo') eq().filter((i) => i.cat === alvo.cat).forEach(guardar);
+  if (alvo.cat === 'escudo') {
+    eq().filter(ehDuasMaos).forEach(guardar);
+    eq().filter((i) => i.cat === 'arma').slice(1).forEach(guardar); // escudo + 1 arma
+  }
+  if (alvo.cat === 'arma') {
+    if (ehDuasMaos(alvo)) eq().filter((i) => i.cat === 'arma' || i.cat === 'escudo').forEach(guardar);
+    else {
+      eq().filter(ehDuasMaos).forEach(guardar);
+      const limite = eq().some((i) => i.cat === 'escudo') ? 0 : 1; // armas que ainda cabem além do alvo
+      eq().filter((i) => i.cat === 'arma').slice(limite).forEach(guardar);
+    }
+  }
+  alvo.equip = true;
+  return guardados;
 }
