@@ -30,3 +30,14 @@ Interpretações adotadas na margem de crítico:
 Na ficha calculada: `rdFisico` traz a RD só contra físico, `perVisual` a Percepção para visão e `critico` em cada ataque o menor d20 natural que é crítico.
 
 Os itens 1, 2 e 5 também afetam o site original; vale avisar o autor.
+
+## Poderes: rolagens e CD (decidido em 2026-11-11)
+
+Ao usar uma habilidade ativa ou um poder do Despertar, o servidor rola ataque, dano ou cura e mostra a CD da Resistência do alvo. A tabela está em `src/regras/poderes.ts`. Interpretações adotadas:
+
+- **CD** = 10 + Nível + mod do atributo-chave (+ bônus do próprio poder, como "+1 de CD por nível"). Em "FOR/AGI", vale o atributo de maior modificador.
+- **Atributo-chave do Despertar**: o livro não define. Usamos o atributo citado no texto do poder (Chama Interior: INT; Toque Restaurador e Presença Opressora: PRE). Nos outros casos, vale o da primeira árvore afim (ex.: Toque Gélido → Elementos → INT).
+- **Dano**: segue o texto de cada poder. Só soma mod e metade do Nível quando o texto diz (ex.: Projétil Elemental "1d10 + mod INT + metade do nível"). Poderes que somam dados ao ataque com arma ("+1d6 de dano") somam ao dano normal da arma.
+- **Poderes ofensivos do Despertar sem "Resistência"** no texto (Raio, Lâmina de vento, Lâmina de sangue, Sopro, Projétil de fogo) usam ataque de poder: 1d20 + Nível + mod do atributo-chave.
+- **Crítico**: todos os dados rolam duas vezes, inclusive os do poder; os modificadores não dobram.
+- Ataque e dano são rolados juntos; quem decide se acertou (Reação do alvo) é o Mestre. Danos por turno (veneno, regeneração, zona) aparecem como fórmula ou rolagem do 1º turno.

@@ -77,7 +77,7 @@ export interface AtaqueCalculado {
 /** Margem de crítico de um ataque.
  *  "Margem 19–20" (Domínio de Armas, Katana +5, Arqueiro Nato nv5) define o ponto de partida;
  *  "margem +1" (Letal, Ponto Vital) amplia a partir dele, cumulativamente. */
-function margemCritico(p: Personagem, it: Item | null, dist: boolean): number {
+export function margemCritico(p: Personagem, it: Item | null, dist: boolean): number {
   let base = 20;
   const dominio = possui(p, ID.dominioDeArmas);
   if (it && !dist && dominio) base = Math.min(base, dominio.nv >= 5 ? 18 : dominio.nv >= 3 ? 19 : 20);
@@ -134,6 +134,8 @@ export interface FichaCalculada {
   efeitosCondicoes: string[];
   /** penalidade nos testes de atributo (Amedrontado, Exausto) */
   penTeste: number;
+  /** penalidade em todos os ataques (Agarrado, Amedrontado, Cego); vale também para ataques de poder */
+  penAtaque: number;
   /** não pode usar Reações (Atordoado, Incapacitado, Inconsciente, Surpreso; Cego, salvo adjacente) */
   semReacao: boolean;
   /** não pode Esquivar (Imobilizado) */
@@ -248,6 +250,7 @@ export function computarFicha(p: Personagem): FichaCalculada {
     condicoes: [],
     efeitosCondicoes: [],
     penTeste: 0,
+    penAtaque: 0,
     semReacao: false,
     semEsquiva: false,
   });
@@ -266,9 +269,12 @@ function aplicarCondicoes(p: Personagem, f: FichaCalculada): FichaCalculada {
   const c = new Set(condicoesAtivas(p));
   const efeitos: string[] = [];
   const somarAtaques = (v: number, soCaC = false) =>
-    f.ataques.forEach((a) => {
-      if (!soCaC || !a.dist) a.atk += v;
-    });
+    {
+      f.ataques.forEach((a) => {
+        if (!soCaC || !a.dist) a.atk += v;
+      });
+      if (!soCaC) f.penAtaque += v;
+    };
   const somarPericias = (v: number) => Object.keys(f.per).forEach((k) => (f.per[k] += v));
   const somarRes = (v: number) => (Object.keys(f.res) as AtributoId[]).forEach((k) => (f.res[k] += v));
 

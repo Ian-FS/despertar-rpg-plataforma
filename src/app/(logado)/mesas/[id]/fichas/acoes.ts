@@ -38,6 +38,7 @@ import { HAB } from '@/regras/dados';
 import { custoUso, PAGA_PM_COM_PV, usosDoDespertar } from '@/regras/despertar-usos';
 import { aplicarCompra, aplicarVenda, precoPedido, validarPedido, type Pedido } from '@/regras/loja';
 import { novoPersonagem, type Personagem } from '@/regras/personagem';
+import { chavesDespertar, chavesHabilidade, efeitoDespertar, efeitoHabilidade, resolverPoder, type EfeitoPoder, type ResultadoPoder } from '@/regras/poderes';
 import { rolar, sortearCrypto, type Rolagem } from '@/regras/rolagem';
 import { ATRIBUTO_IDS, RANK_IDS, type AtributoId, type Rank } from '@/regras/tipos';
 import { mesclarEdicaoJogador, normalizarPersonagem, resumoFicha, validarFicha } from '@/regras/validacao';
@@ -314,6 +315,16 @@ export interface ResultadoUso extends Resultado {
   mudanca?: MudancaFicha;
   rolagem?: Rolagem;
   mensagem?: string;
+  /** rolagens de ataque, dano e a CD de um poder usado */
+  poder?: ResultadoPoder;
+}
+
+/** Rola o poder e desconta o dano que o próprio usuário sofre (ex.: Sobrecarga). */
+function rolarPoder(p: Personagem, ef: EfeitoPoder | null, chaves: AtributoId[]): ResultadoPoder | undefined {
+  if (!ef) return undefined;
+  const res = resolverPoder(p, ef, chaves);
+  if (res.danoProprio) p.pvAtual = (p.pvAtual ?? computarFicha(p).pvMax) - res.danoProprio;
+  return res;
 }
 
 const mudancaDe = (p: Personagem): MudancaFicha => ({ pvAtual: p.pvAtual, pmAtual: p.pmAtual, itens: p.itens, condicoes: p.condicoes, ouro: p.ouro });
@@ -379,8 +390,9 @@ export async function usarHabilidade(fichaId: string, habId: string, pagarComPV 
     if (h.tipo !== 'Ativa' || !h.pm) return { erro: 'Essa habilidade não gasta PM.' };
     const r = pagarPM(p, h.n, h.pm, pagarComPV);
     if (r.erro) return { erro: r.erro };
+    const poder = rolarPoder(p, efeitoHabilidade(p, habId), chavesHabilidade(habId));
     await gravarFicha(fichaId, p);
-    return { mudanca: mudancaDe(p), mensagem: r.mensagem };
+    return { mudanca: mudancaDe(p), mensagem: r.mensagem, poder };
   });
 }
 
@@ -397,8 +409,9 @@ export async function usarDespertar(fichaId: string, usoId: string, rank: Rank =
     const nome = uso.porRank ? `${uso.nome} (Rank ${rank})` : uso.nome;
     const r = pagarPM(p, nome, custo, pagarComPV);
     if (r.erro) return { erro: r.erro };
+    const poder = rolarPoder(p, efeitoDespertar(p, usoId), chavesDespertar(p.despertar.id));
     await gravarFicha(fichaId, p);
-    return { mudanca: mudancaDe(p), mensagem: r.mensagem };
+    return { mudanca: mudancaDe(p), mensagem: r.mensagem, poder };
   });
 }
 

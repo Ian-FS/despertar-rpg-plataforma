@@ -16,6 +16,16 @@ import {
 } from '@/regras/ficha';
 import { RANK_IDS, type ArvoreId, type Habilidade, type Rank } from '@/regras/tipos';
 import { custoUso, PAGA_PM_COM_PV, usosDoDespertar } from '@/regras/despertar-usos';
+import {
+  chavesDespertar,
+  chavesHabilidade,
+  efeitoDespertar,
+  efeitoHabilidade,
+  previaPoder,
+  type PreviaPoder,
+  type ResultadoPoder,
+} from '@/regras/poderes';
+import { d20Natural, ehCritico } from '@/regras/rolagem';
 import { usarDespertar, usarHabilidade, type ResultadoUso } from '../acoes';
 import type { PropsAba } from './ficha-editor';
 
@@ -100,6 +110,7 @@ function UsosDespertar({
           <span className="min-w-0 flex-1">
             <b>{u.nome}</b> <span className="text-xs text-apagado">· {u.acao}{u.freq ? ` · ${u.freq}` : ''}{u.forma ? ' · Forma Evoluída' : ''}</span>
             <span className="block text-xs text-apagado">{u.liberado ? u.desc : `Bloqueado: ${u.motivo}.`}</span>
+            {u.liberado && <LinhaPrevia previa={previaDesp(salvo, u.id)} />}
           </span>
           {u.porRank && u.liberado && (
             <select aria-label="Rank da Sombra" className="campo px-2 py-0.5 text-xs" value={rank} onChange={(e) => setRank(e.target.value as Rank)}>
@@ -178,6 +189,11 @@ function Minhas({ p, salvo, alterar, aplicarMudanca, podeEditar, souMestre, fich
                   </button>
                 )}
               </div>
+              {h.tipo === 'Ativa' && salvo.habs.some((y) => y.id === x.id) && (
+                <div className="px-2 pb-2">
+                  <LinhaPrevia previa={previaHab(salvo, x.id)} />
+                </div>
+              )}
               {aberta === x.id && (
                 <div className="border-t border-linha p-2">
                   <CartaoHabilidade h={h} />
@@ -309,6 +325,67 @@ function Comprar({ h, p, ph, podeEditar, onComprar }: { h: Habilidade; p: PropsA
 }
 
 /** Botão "Usar": o servidor desconta o PM. Sem PM, oferece a Exaustão de Mana (ou a Hemomancia). */
+const previaHab = (p: PropsAba['p'], id: string) => {
+  const ef = efeitoHabilidade(p, id);
+  return ef ? previaPoder(p, ef, chavesHabilidade(id)) : undefined;
+};
+const previaDesp = (p: PropsAba['p'], usoId: string) => {
+  const ef = efeitoDespertar(p, usoId);
+  return ef ? previaPoder(p, ef, chavesDespertar(p.despertar.id)) : undefined;
+};
+
+/** Ataque, dano e CD do poder, antes de usar. */
+function LinhaPrevia({ previa }: { previa?: PreviaPoder }) {
+  if (!previa) return null;
+  const partes = [previa.teste, previa.ataque, previa.dano, previa.proprio].filter(Boolean);
+  if (!partes.length && !previa.resistencia) return null;
+  return (
+    <span className="block font-mono text-xs text-sys">
+      {partes.join(' · ')}
+      {previa.resistencia && <span className="block text-ouro">{previa.resistencia}</span>}
+    </span>
+  );
+}
+
+/** Resultado de um poder usado: rolagens (com crítico) e a CD para o alvo. */
+function PainelPoder({ titulo, res, onFechar }: { titulo: string; res: ResultadoPoder; onFechar: () => void }) {
+  return (
+    <div className="janela aparecer basis-full p-3 text-sm">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="font-mono text-xs tracking-[0.2em] text-sys">[ {titulo} ]</span>
+        <button className="text-xs text-apagado hover:text-texto" onClick={onFechar} aria-label="Fechar resultado">
+          ✕
+        </button>
+      </div>
+      {res.rolagens.length > 0 && (
+        <ul className="grid gap-1.5 sm:grid-cols-2">
+          {res.rolagens.map((x, i) => {
+            const nat = d20Natural(x.r);
+            const crit = x.tipo === 'ataque' && ehCritico(x.r, x.critico ?? 20);
+            const falha = x.tipo !== 'dano' && x.tipo !== 'cura' && nat === 1;
+            const cor = crit || x.dobrado ? 'text-ouro' : falha || x.tipo === 'proprio' ? 'text-perigo' : x.tipo === 'cura' ? 'text-ok' : 'text-sys';
+            return (
+              <li key={i} className={`flex items-baseline gap-2 border border-linha bg-painel-2 px-2 py-1 ${crit ? 'rolagem-critico' : ''}`}>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs text-apagado">{x.rotulo}</span>
+                  <span className="font-mono text-xs text-apagado">
+                    {x.r.texto}
+                    {crit ? (nat === 20 ? ' · 20 natural!' : ` · crítico (${x.critico}+)`) : falha ? ' · 1 natural' : ''}
+                  </span>
+                </span>
+                <span className={`text-2xl font-bold ${cor}`}>{x.r.total}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {res.resistencia && <p className="mt-2 font-mono text-xs text-ouro">{res.resistencia}</p>}
+      {res.nota && <p className="mt-1 text-xs text-apagado">{res.nota}</p>}
+      {res.danoProprio ? <p className="mt-1 text-xs text-perigo">Você sofreu {res.danoProprio} de dano (já descontado dos PV).</p> : null}
+    </div>
+  );
+}
+
 function BotaoUsar({
   pm,
   executar,
@@ -325,6 +402,7 @@ function BotaoUsar({
   const efeitos = useEfeitos();
   const [pendente, iniciar] = useTransition();
   const [semPM, setSemPM] = useState<string | null>(null);
+  const [resultado, setResultado] = useState<{ titulo: string; res: ResultadoPoder } | null>(null);
   const usar = (comPV: boolean) =>
     iniciar(async () => {
       const r = await executar(comPV);
@@ -338,6 +416,11 @@ function BotaoUsar({
       if (r.mudanca) aplicarMudanca(r.mudanca);
       efeitos.som(comPV ? 'dano' : 'sistema');
       efeitos.aviso(`[ SISTEMA ] ${r.mensagem}`, comPV ? 'perigo' : 'sys');
+      if (r.poder && (r.poder.rolagens.length || r.poder.resistencia || r.poder.nota)) {
+        setResultado({ titulo: (r.mensagem ?? '').split(':')[0].toUpperCase(), res: r.poder });
+        const crit = r.poder.rolagens.some((x) => x.tipo === 'ataque' && ehCritico(x.r, x.critico ?? 20));
+        if (r.poder.rolagens.length) setTimeout(() => efeitos.som(crit ? 'critico' : 'dado'), 250);
+      }
     });
 
   if (semPM)
@@ -353,8 +436,11 @@ function BotaoUsar({
       </span>
     );
   return (
-    <button className="botao px-2 py-0.5 text-xs" disabled={pendente} onClick={() => usar(false)} title="Desconta o PM">
-      {rotulo ?? 'Usar'} · {pm ? `${pm} PM` : 'sem custo'}
-    </button>
+    <>
+      <button className="botao px-2 py-0.5 text-xs" disabled={pendente} onClick={() => usar(false)} title="Desconta o PM e rola o poder">
+        {rotulo ?? 'Usar'} · {pm ? `${pm} PM` : 'sem custo'}
+      </button>
+      {resultado && <PainelPoder titulo={resultado.titulo} res={resultado.res} onFechar={() => setResultado(null)} />}
+    </>
   );
 }
