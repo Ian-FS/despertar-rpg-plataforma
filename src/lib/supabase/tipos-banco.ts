@@ -10,11 +10,59 @@ export type Perfil = {
   criado_em: string;
 };
 
+export type RegrasMesa = {
+  metodoPadrao: boolean;
+  escolhaGuiada: boolean;
+  marcos: boolean;
+  provacao: boolean;
+};
+
 export type Mesa = {
   id: string;
   nome: string;
   codigo_convite: string;
   criado_por: string;
+  criado_em: string;
+  regras: RegrasMesa;
+};
+
+export type EtapaFicha = 'conceito' | 'atributos' | 'despertar' | 'avaliacao' | 'pronta';
+
+export type ResumoFicha = {
+  nome: string;
+  nivel: number;
+  rank: string;
+  despertar: string;
+  pvMax: number;
+  pmMax: number;
+  pvAtual: number;
+  pmAtual: number;
+  condicoes: string;
+};
+
+export type FichaLinha = {
+  id: string;
+  mesa_id: string;
+  dono_id: string;
+  tipo: 'jogador' | 'npc';
+  ativa: boolean;
+  etapa: EtapaFicha;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  dados: any;
+  resumo: ResumoFicha | Record<string, never>;
+  sorteios_liberados: string[];
+  criado_em: string;
+  atualizado_em: string;
+};
+
+export type SorteioLinha = {
+  id: string;
+  ficha_id: string;
+  mesa_id: string;
+  autor_id: string;
+  tipo: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  resultado: any;
   criado_em: string;
 };
 
@@ -37,7 +85,19 @@ export type Database = {
       mesas: {
         Row: Mesa;
         Insert: { [_ in never]: never };
-        Update: { nome?: string };
+        Update: { nome?: string; regras?: RegrasMesa };
+        Relationships: [];
+      };
+      fichas: {
+        Row: FichaLinha;
+        Insert: Partial<FichaLinha> & Pick<FichaLinha, 'mesa_id' | 'dono_id' | 'dados'>;
+        Update: Partial<FichaLinha>;
+        Relationships: [];
+      };
+      sorteios: {
+        Row: SorteioLinha;
+        Insert: Omit<SorteioLinha, 'id' | 'criado_em'>;
+        Update: Partial<SorteioLinha>;
         Relationships: [];
       };
       membros: {
@@ -70,6 +130,10 @@ export type Database = {
       ver_convite: {
         Args: { p_codigo: string };
         Returns: { mesa_id: string; nome: string; ja_sou_membro: boolean }[];
+      };
+      resumo_fichas: {
+        Args: { p_mesa: string };
+        Returns: { id: string; dono_id: string; ativa: boolean; etapa: EtapaFicha; resumo: ResumoFicha }[];
       };
       eh_membro: { Args: { p_mesa: string }; Returns: boolean };
       eh_mestre: { Args: { p_mesa: string }; Returns: boolean };

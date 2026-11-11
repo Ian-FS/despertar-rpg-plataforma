@@ -126,13 +126,16 @@ Cada fase termina com algo que o grupo já usa. Trabalho em branches, uma por ta
 **Pronto quando:** cada um entra com o Google e vê a mesa do grupo no endereço da Vercel.
 
 ### Fase 1 — Ficha
-- [ ] Criação guiada nos 8 passos: Potencial e Atributos (sorteio), Despertar (d100, com Escolha Guiada opcional), Avaliação do Sistema, PH, Perícias, derivados, equipamento inicial
-- [ ] Ficha com todos os valores calculados; clicar num valor rola o dado
-- [ ] Árvores: mapa das 10 árvores, comprar e evoluir habilidades respeitando requisitos e afinidade
-- [ ] Subir de nível guiado (1d6 Status e 1d6 PH com Bênção do Sistema, perícias, PV e PM; novo Rank a cada 5 níveis)
-- [ ] Equipamento: Rank, Refino, afixos, Selos e Sincronia; inventário de 20 espaços; Ouro; Títulos
-- [ ] PV/PM atuais, condições, descansos curto e longo
+- [x] Criação guiada nos 8 passos: Potencial e Atributos (sorteio), Despertar (d100, com Escolha Guiada opcional), Avaliação do Sistema, PH, Perícias, derivados, equipamento inicial
+- [x] Ficha com todos os valores calculados; clicar num valor rola o dado
+- [x] Árvores: mapa das 10 árvores, comprar e evoluir habilidades respeitando requisitos e afinidade
+- [x] Subir de nível guiado (1d6 Status e 1d6 PH com Bênção do Sistema, perícias, PV e PM; novo Rank a cada 5 níveis)
+- [x] Equipamento: Rank, Refino, afixos, Selos e Sincronia; inventário de 20 espaços; Ouro; Títulos
+- [x] PV/PM atuais, condições, descansos curto e longo
 - [ ] Layout testado no celular
+- [x] Sorteios no servidor com registro; Mestre libera novo sorteio
+- [x] Regras opcionais por mesa (Método Padrão, Escolha Guiada, Marcos, Provação)
+- [x] Várias fichas por jogador, uma ativa; resumo do grupo para todos
 
 **Pronto quando:** o grupo cria os personagens na plataforma e joga uma sessão usando a ficha.
 

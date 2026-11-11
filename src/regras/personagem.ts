@@ -65,6 +65,8 @@ export interface Personagem {
   nome: string;
   jogador: string;
   conceito: string;
+  idade: string;
+  ocupacao: string;
   motivo: string;
   nivel: number;
   xp: number;
@@ -73,6 +75,8 @@ export interface Personagem {
   ouro: number;
   /** valores atuais dos atributos (base + 2d6 + Pontos de Status já aplicados) */
   atr: Record<AtributoId, number>;
+  /** valores sorteados (ou do Método Padrão), antes dos Pontos de Status; o jogador não desce abaixo deles */
+  atrBase: Record<AtributoId, number>;
   /** Pontos de Status ainda não distribuídos */
   statusPend: number;
   /** compensação do Potencial */
@@ -87,8 +91,10 @@ export interface Personagem {
   pericias: Record<string, number>;
   despertar: { id: string; nv: number };
   habs: HabilidadeAdquirida[];
-  /** id do Título equipado */
+  /** id do Título equipado (um dos obtidos) */
   titulo: string;
+  /** Títulos conquistados (o Mestre concede) */
+  titulosObtidos: string[];
   pvAtual: number | null;
   pmAtual: number | null;
   bonus: BonusManual;
@@ -176,6 +182,8 @@ export function novoPersonagem(armaInicial = 'Espada'): Personagem {
     nome: 'Novo Caçador',
     jogador: '',
     conceito: '',
+    idade: '',
+    ocupacao: '',
     motivo: '',
     nivel: 1,
     xp: 0,
@@ -183,6 +191,7 @@ export function novoPersonagem(armaInicial = 'Espada'): Personagem {
     potencial: 'Normal',
     ouro: 100,
     atr: { FOR: 10, AGI: 10, VIT: 10, INT: 10, PER: 10, PRE: 10 },
+    atrBase: { FOR: 10, AGI: 10, VIT: 10, INT: 10, PER: 10, PRE: 10 },
     statusPend: 0,
     compPot: { ph: 0, st: 0 },
     compDesp: { ph: 0, st: 0 },
@@ -192,6 +201,7 @@ export function novoPersonagem(armaInicial = 'Espada'): Personagem {
     despertar: { id: '', nv: 1 },
     habs: [],
     titulo: '',
+    titulosObtidos: [],
     pvAtual: null,
     pmAtual: null,
     bonus: { pv: 0, pm: 0, def: 0, esq: 0, atk: 0, dano: 0, rd: 0, desl: 0, ini: 0 },
