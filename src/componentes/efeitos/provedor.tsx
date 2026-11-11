@@ -30,12 +30,18 @@ interface Efeitos {
   abrir: (j: Janela) => Promise<void>;
 }
 
-const Ctx = createContext<Efeitos | null>(null);
+/** Sem provedor, os efeitos viram "nada acontece": nunca derrubam a página. */
+const SEM_EFEITOS: Efeitos = {
+  prefs: { rapido: true, som: false },
+  som: () => {},
+  aviso: () => {},
+  abrir: () => Promise.resolve(),
+};
+
+const Ctx = createContext<Efeitos>(SEM_EFEITOS);
 
 export function useEfeitos(): Efeitos {
-  const c = useContext(Ctx);
-  if (!c) throw new Error('useEfeitos fora do ProvedorEfeitos');
-  return c;
+  return useContext(Ctx);
 }
 
 let seq = 0;
