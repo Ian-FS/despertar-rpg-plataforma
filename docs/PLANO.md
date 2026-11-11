@@ -121,7 +121,7 @@ Cada fase termina com algo que o grupo já usa. Trabalho em branches, uma por ta
 - [x] Decidir as divergências de cálculo e implementar
 - [x] Projeto Supabase, login com Google, tabelas `perfis`, `mesas`, `membros` com RLS
 - [x] Criar mesa, gerar link de convite, entrar na mesa
-- [ ] Deploy na Vercel
+- [x] Deploy na Vercel (https://despertar-rpg-plataforma.vercel.app)
 
 **Pronto quando:** cada um entra com o Google e vê a mesa do grupo no endereço da Vercel.
 
