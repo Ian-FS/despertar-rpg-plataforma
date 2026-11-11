@@ -10,6 +10,15 @@ import { REGRAS_PADRAO } from './regras-padrao';
 
 export class ErroFicha extends Error {}
 
+/** Interrompe a ação com uma mensagem clara se a operação no banco falhou. */
+export function exigir<T extends { error: { message: string } | null }>(r: T, mensagem: string): T {
+  if (r.error) {
+    console.error(`[fichas] ${mensagem}`, r.error.message);
+    throw new ErroFicha(mensagem);
+  }
+  return r;
+}
+
 export interface ContextoMesa {
   usuarioId: string;
   mesaId: string;
@@ -21,10 +30,13 @@ export async function contextoMesa(mesaId: string): Promise<ContextoMesa> {
   const usuario = await usuarioAtual();
   if (!usuario) throw new ErroFicha('Sua sessão expirou. Entre de novo.');
   const admin = clienteAdmin();
-  const [{ data: membro }, { data: mesa }] = await Promise.all([
+  const [rMembro, rMesa] = await Promise.all([
     admin.from('membros').select('papel').eq('mesa_id', mesaId).eq('usuario_id', usuario.id).maybeSingle(),
     admin.from('mesas').select('regras').eq('id', mesaId).maybeSingle(),
   ]);
+  const erroBanco = 'O servidor não conseguiu acessar o banco. Avise quem administra a plataforma.';
+  const membro = exigir(rMembro, erroBanco).data;
+  const mesa = exigir(rMesa, erroBanco).data;
   if (!membro || !mesa) throw new ErroFicha('Você não faz parte desta mesa.');
   return {
     usuarioId: usuario.id,
@@ -43,7 +55,10 @@ export interface ContextoFicha extends ContextoMesa {
 /** Ficha + permissão. Só o dono e o Mestre passam. */
 export async function contextoFicha(fichaId: string): Promise<ContextoFicha> {
   const admin = clienteAdmin();
-  const { data: ficha } = await admin.from('fichas').select('*').eq('id', fichaId).maybeSingle();
+  const { data: ficha } = exigir(
+    await admin.from('fichas').select('*').eq('id', fichaId).maybeSingle(),
+    'O servidor não conseguiu acessar o banco. Avise quem administra a plataforma.',
+  );
   if (!ficha) throw new ErroFicha('Ficha não encontrada.');
   const ctx = await contextoMesa(ficha.mesa_id);
   const souDono = ficha.dono_id === ctx.usuarioId;
@@ -74,11 +89,11 @@ export async function registrarSorteio(ctx: ContextoFicha, tipo: string, resulta
 /** O sorteio pode ser feito? Só uma vez, a menos que o Mestre tenha liberado de novo. */
 export async function sorteioPermitido(ctx: ContextoFicha, tipo: string): Promise<boolean> {
   if (ctx.ficha.sorteios_liberados.includes(tipo)) return true;
-  const { count } = await clienteAdmin()
-    .from('sorteios')
-    .select('id', { count: 'exact', head: true })
-    .eq('ficha_id', ctx.ficha.id)
-    .eq('tipo', tipo);
+  // se a consulta falhar, exigir() interrompe: nunca liberar um sorteio por erro do banco
+  const { count } = exigir(
+    await clienteAdmin().from('sorteios').select('id', { count: 'exact', head: true }).eq('ficha_id', ctx.ficha.id).eq('tipo', tipo),
+    'Não foi possível conferir os sorteios anteriores. Tente de novo.',
+  );
   return !count;
 }
 

@@ -7,6 +7,7 @@ import {
   ErroFicha,
   contextoFicha,
   contextoMesa,
+  exigir,
   gravarFicha,
   registrarSorteio,
   semLiberacao,
@@ -69,7 +70,10 @@ export async function criarFicha(mesaId: string, _anterior: Resultado, form: For
     p.motivo = String(form.get('motivo') ?? '').slice(0, 500);
 
     const admin = clienteAdmin();
-    await admin.from('fichas').update({ ativa: false }).eq('mesa_id', mesaId).eq('dono_id', ctx.usuarioId).eq('tipo', 'jogador');
+    exigir(
+      await admin.from('fichas').update({ ativa: false }).eq('mesa_id', mesaId).eq('dono_id', ctx.usuarioId).eq('tipo', 'jogador'),
+      'Não foi possível criar a ficha. Tente de novo.',
+    );
     const { data, error } = await admin
       .from('fichas')
       .insert({ mesa_id: mesaId, dono_id: ctx.usuarioId, dados: p, resumo: resumoFicha(p), etapa: 'atributos', ativa: true })
@@ -87,8 +91,9 @@ export async function ativarFicha(fichaId: string): Promise<Resultado> {
   return tentar(async () => {
     const ctx = await contextoFicha(fichaId);
     const admin = clienteAdmin();
-    await admin.from('fichas').update({ ativa: false }).eq('mesa_id', ctx.mesaId).eq('dono_id', ctx.ficha.dono_id).eq('tipo', 'jogador');
-    await admin.from('fichas').update({ ativa: true }).eq('id', fichaId);
+    const msg = 'Não foi possível ativar a ficha. Tente de novo.';
+    exigir(await admin.from('fichas').update({ ativa: false }).eq('mesa_id', ctx.mesaId).eq('dono_id', ctx.ficha.dono_id).eq('tipo', 'jogador'), msg);
+    exigir(await admin.from('fichas').update({ ativa: true }).eq('id', fichaId), msg);
     revalidatePath(`/mesas/${ctx.mesaId}`);
     return {};
   });
@@ -98,7 +103,7 @@ export async function excluirFicha(fichaId: string): Promise<Resultado> {
   let destino = '';
   const r = await tentar(async () => {
     const ctx = await contextoFicha(fichaId);
-    await clienteAdmin().from('fichas').delete().eq('id', fichaId);
+    exigir(await clienteAdmin().from('fichas').delete().eq('id', fichaId), 'Não foi possível excluir a ficha.');
     destino = `/mesas/${ctx.mesaId}`;
     return {};
   });
@@ -167,14 +172,17 @@ export async function sortearDespertarAcao(fichaId: string): Promise<Resultado> 
 
 /** Sorteio pendente de escolha (Despertar da Escolha Guiada ou Avaliação do Sistema). */
 async function sorteioPendente(ctx: ContextoFicha, tipo: string) {
-  const { data } = await clienteAdmin()
-    .from('sorteios')
-    .select('*')
-    .eq('ficha_id', ctx.ficha.id)
-    .eq('tipo', tipo)
-    .order('criado_em', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const { data } = exigir(
+    await clienteAdmin()
+      .from('sorteios')
+      .select('*')
+      .eq('ficha_id', ctx.ficha.id)
+      .eq('tipo', tipo)
+      .order('criado_em', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    'Não foi possível conferir os sorteios. Tente de novo.',
+  );
   return data && data.resultado?.escolhida == null ? data : null;
 }
 
@@ -183,7 +191,10 @@ export async function escolherDespertarAcao(fichaId: string, despertarId: string
     const ctx = await contextoFicha(fichaId);
     const pendente = await sorteioPendente(ctx, 'despertar');
     if (!pendente || !pendente.resultado.opcoes.includes(despertarId)) return { erro: 'Escolha um dos Despertares sorteados.' };
-    await clienteAdmin().from('sorteios').update({ resultado: { ...pendente.resultado, escolhida: despertarId } }).eq('id', pendente.id);
+    exigir(
+      await clienteAdmin().from('sorteios').update({ resultado: { ...pendente.resultado, escolhida: despertarId } }).eq('id', pendente.id),
+      'Não foi possível registrar a escolha. Tente de novo.',
+    );
     aplicarDespertar(ctx.p, despertarId);
     await gravarFicha(fichaId, ctx.p, { etapa: await avancar(ctx, 'despertar', 'avaliacao') });
     revalidatePath(caminhoFicha(ctx));
@@ -209,7 +220,10 @@ export async function escolherAvaliacaoAcao(fichaId: string, habId: string): Pro
     const ctx = await contextoFicha(fichaId);
     const pendente = await sorteioPendente(ctx, 'avaliacao');
     if (!pendente || !pendente.resultado.opcoes.includes(habId)) return { erro: 'Escolha uma das habilidades sorteadas.' };
-    await clienteAdmin().from('sorteios').update({ resultado: { ...pendente.resultado, escolhida: habId } }).eq('id', pendente.id);
+    exigir(
+      await clienteAdmin().from('sorteios').update({ resultado: { ...pendente.resultado, escolhida: habId } }).eq('id', pendente.id),
+      'Não foi possível registrar a escolha. Tente de novo.',
+    );
     aplicarAvaliacao(ctx.p, habId);
     await gravarFicha(fichaId, ctx.p, { etapa: await avancar(ctx, 'avaliacao', 'pronta') });
     revalidatePath(caminhoFicha(ctx));
@@ -269,7 +283,7 @@ export async function liberarSorteioAcao(fichaId: string, tipo: 'atributos' | 'd
     const ctx = await contextoFicha(fichaId);
     if (!ctx.souMestre) return { erro: 'Só o Mestre libera um novo sorteio.' };
     const lista = Array.from(new Set([...ctx.ficha.sorteios_liberados, tipo]));
-    await clienteAdmin().from('fichas').update({ sorteios_liberados: lista }).eq('id', fichaId);
+    exigir(await clienteAdmin().from('fichas').update({ sorteios_liberados: lista }).eq('id', fichaId), 'Não foi possível liberar o sorteio.');
     revalidatePath(caminhoFicha(ctx));
     return {};
   });
@@ -285,7 +299,7 @@ export async function salvarRegrasMesa(mesaId: string, regras: RegrasMesa): Prom
       marcos: !!regras.marcos,
       provacao: !!regras.provacao,
     };
-    await clienteAdmin().from('mesas').update({ regras: limpas }).eq('id', mesaId);
+    exigir(await clienteAdmin().from('mesas').update({ regras: limpas }).eq('id', mesaId), 'Não foi possível salvar as regras. Tente de novo.');
     revalidatePath(`/mesas/${mesaId}`);
     return {};
   });
