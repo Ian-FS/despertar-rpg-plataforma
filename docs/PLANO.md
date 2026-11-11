@@ -118,7 +118,7 @@ Cada fase termina com algo que o grupo já usa. Trabalho em branches, uma por ta
 - [x] Portar `computar()` e funções auxiliares (requisitos, custo de PH, afinidade, `EFEITOS_HAB`, `EFEITOS_DESP`)
 - [x] Testes: exemplo da Rafa (PV 12, PM 11, Desloc. 11 m, Esquivar +6, Ataque +6), mods, custos de PH, requisitos
 - [x] Conferir `data.js` contra `regras.md` e listar divergências para você decidir ([divergencias.md](divergencias.md))
-- [ ] Decidir as divergências de cálculo e implementar
+- [x] Decidir as divergências de cálculo e implementar
 - [ ] Projeto Supabase, login com Google, tabelas `perfis`, `mesas`, `membros` com RLS
 - [ ] Criar mesa, gerar link de convite, entrar na mesa
 - [ ] Deploy na Vercel

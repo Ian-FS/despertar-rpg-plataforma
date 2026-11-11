@@ -6,11 +6,13 @@ type EfeitoNivel = (nv: number, ctx: { nivel: number }) => Bonus;
 
 export const EFEITOS_HAB: Record<string, EfeitoNivel> = {
   lam1: (nv) => ({ atkCaC: nv }), // Domínio de Armas
-  pun1: (nv) => ({ desarmado: ['1d6', '1d8', '1d10', '2d6', '2d8'][nv - 1] }), // Punhos de Ferro
+  // Punhos de Ferro: o desarmado conta como arma do seu Rank (recebe o Bônus de Rank)
+  pun1: (nv) => ({ desarmado: ['1d6', '1d8', '1d10', '2d6', '2d8'][nv - 1], brDesarmado: 1 }),
   vul1: (nv) => ({ 'per.Furtividade': 2 * nv }), // Passos Silenciosos
   dis1: (nv) => ({ atkDist: nv }), // Mira Firme
-  dis4: (nv) => ({ 'per.Percepção': 2 * nv }), // Olho de Falcão
-  bas1: (nv) => ({ rd: nv, pv: nv >= 5 ? 10 : 0 }), // Pele Resistente
+  dis4: (nv) => ({ percepcaoVisual: 2 * nv }), // Olho de Falcão: só Percepção visual
+  // Pele Resistente: RD só contra dano físico; a partir do nível 3 vale também contra elemental
+  bas1: (nv) => ({ ...(nv >= 3 ? { rd: nv } : { rdFisico: nv }), pv: nv >= 5 ? 10 : 0 }),
   bas6: (nv, { nivel }) => ({ pv: nv * nivel }), // Fortaleza Viva
   sen3: (nv) => ({ ini: 2 * nv }), // Instinto de Perigo
   pun7: (nv) => ({ rd: 4 + 2 * (nv - 1) }), // Corpo Inquebrável
@@ -22,7 +24,8 @@ export const EFEITOS_DESP: Record<string, EfeitoNivel> = {
   d01: (nv) => ({ rd: 2 + (nv - 1) }), // Corpo Endurecido
   d03: (nv) => ({ 'per.Percepção': 2 + (nv - 1), 'per.Sentir Mana': 2 + (nv - 1) }), // Olhos de Caçador
   d04: (nv) => ({ desl: 3 + 1.5 * (nv - 1), ini: 2 + (nv - 1) }), // Passos Velozes
-  d08: (nv) => ({ atkDist: nv }), // Arqueiro Nato
+  // Arqueiro Nato: +1 ataque à distância por nível; +1d4 de dano à distância, +1d4 nos níveis 3 e 5
+  d08: (nv) => ({ atkDist: nv, d4Dist: 1 + (nv >= 3 ? 1 : 0) + (nv >= 5 ? 1 : 0) }),
   d17: (nv) => ({ 'per.Intimidação': 2 + (nv - 1) }), // Presença Opressora
   d29: () => ({ rd: 3 }), // Coração de Dragão
 };

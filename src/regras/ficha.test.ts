@@ -171,6 +171,99 @@ describe('equipamento', () => {
   });
 });
 
+describe('regras decididas em docs/divergencias.md', () => {
+  const lutador = () => {
+    const p = novoPersonagem();
+    p.nivel = 10; // Rank C, BR 2
+    p.atr = { FOR: 20, AGI: 10, VIT: 10, INT: 10, PER: 10, PRE: 10 };
+    return p;
+  };
+
+  it('1. Punhos de Ferro: desarmado recebe o Bônus de Rank do personagem', () => {
+    const p = lutador();
+    const semPunhos = computarFicha(p).ataques[0];
+    expect([semPunhos.atk, semPunhos.dado, semPunhos.bonus]).toEqual([15, '1d4', 10]);
+    p.habs = [{ id: hab('Punhos de Ferro').id, nv: 3, gratis: true }];
+    const comPunhos = computarFicha(p).ataques[0];
+    expect([comPunhos.atk, comPunhos.dado, comPunhos.bonus]).toEqual([17, '1d10', 14]);
+  });
+
+  it('2. Arqueiro Nato: +1d4 de dano à distância (+1d4 nos níveis 3 e 5), só à distância', () => {
+    const p = novoPersonagem('Arco');
+    p.itens.push(Object.assign(armaComum('Espada'), { equip: true }));
+    p.despertar = { id: desp('Arqueiro Nato').id, nv: 1 };
+    const arco = () => computarFicha(p).ataques.find((a) => a.nome === 'Arco')!;
+    const espada = () => computarFicha(p).ataques.find((a) => a.nome === 'Espada')!;
+    expect(arco().dado).toBe('1d6+1d4');
+    expect(arco().atk).toBe(1 + 1);
+    expect(espada().dado).toBe('1d8');
+    p.despertar.nv = 3;
+    expect(arco().dado).toBe('1d6+2d4');
+    p.despertar.nv = 5;
+    expect(arco().dado).toBe('1d6+3d4');
+  });
+
+  it('3. Pele Resistente: RD só contra físico até o nível 3', () => {
+    const p = novoPersonagem();
+    p.atr.VIT = 12;
+    p.habs = [{ id: hab('Pele Resistente').id, nv: 2, gratis: true }];
+    expect([computarFicha(p).rd, computarFicha(p).rdFisico]).toEqual([0, 2]);
+    p.habs[0].nv = 3;
+    expect([computarFicha(p).rd, computarFicha(p).rdFisico]).toEqual([3, 0]);
+    p.habs[0].nv = 5;
+    expect(computarFicha(p).pvMax).toBe(11 + 10);
+  });
+
+  it('4. Olho de Falcão: o bônus vale só para Percepção visual', () => {
+    const p = novoPersonagem();
+    p.atr.PER = 16;
+    p.habs = [{ id: hab('Olho de Falcão').id, nv: 2, gratis: true }];
+    const f = computarFicha(p);
+    expect(f.per['Percepção']).toBe(3);
+    expect(f.perVisual).toBe(3 + 4);
+  });
+
+  describe('5. margem de crítico', () => {
+    it('padrão é só o 20 natural', () => {
+      const f = computarFicha(novoPersonagem());
+      expect(f.ataques.map((a) => a.critico)).toEqual([20, 20]);
+    });
+
+    it('Domínio de Armas: 19–20 no nv3 e 18–20 no nv5, só com armas corpo a corpo', () => {
+      const p = novoPersonagem('Espada');
+      p.itens.push(Object.assign(armaComum('Arco'), { equip: true }));
+      p.habs = [{ id: hab('Domínio de Armas').id, nv: 3, gratis: true }];
+      const crit = () => Object.fromEntries(computarFicha(p).ataques.map((a) => [a.nome, a.critico]));
+      expect(crit()).toEqual({ Desarmado: 20, Espada: 19, Arco: 20 });
+      p.habs[0].nv = 5;
+      expect(crit().Espada).toBe(18);
+    });
+
+    it('Katana com Refino +5 critica com 19–20', () => {
+      const p = novoPersonagem('Katana');
+      const katana = () => computarFicha(p).ataques.find((a) => a.nome === 'Katana')!.critico;
+      expect(katana()).toBe(20);
+      p.itens[0].refino = 5;
+      expect(katana()).toBe(19);
+    });
+
+    it('Letal e Ponto Vital ampliam a margem, somando com as outras fontes', () => {
+      const p = novoPersonagem('Espada');
+      p.itens[0].afixos = [{ n: 'Letal', desc: '' }];
+      p.habs = [{ id: hab('Domínio de Armas').id, nv: 3, gratis: true }];
+      expect(computarFicha(p).ataques[1].critico).toBe(18); // 19 do Domínio, +1 do Letal
+      p.habs.push({ id: hab('Ponto Vital').id, nv: 1, gratis: true });
+      expect(computarFicha(p).ataques.map((a) => a.critico)).toEqual([19, 17]);
+    });
+
+    it('Arqueiro Nato nv5: ataques à distância com 19–20', () => {
+      const p = novoPersonagem('Arco');
+      p.despertar = { id: desp('Arqueiro Nato').id, nv: 5 };
+      expect(computarFicha(p).ataques[1].critico).toBe(19);
+    });
+  });
+});
+
 describe('requisitos de habilidade', () => {
   it('bloqueia por nível, atributo e pré-requisito', () => {
     const p = rafa();

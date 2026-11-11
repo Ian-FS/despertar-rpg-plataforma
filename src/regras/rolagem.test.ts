@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { d20Natural, mediaDado, normalizarFormula, rolar, sortearCrypto, type Sorteio } from './rolagem';
+import { d20Natural, ehCritico, mediaDado, normalizarFormula, rolar, sortearCrypto, type Sorteio } from './rolagem';
 
 /** Sorteio previsível: devolve os valores em sequência. */
 const fixo = (...valores: number[]): Sorteio => {
@@ -36,6 +36,15 @@ describe('rolar', () => {
     expect(d20Natural(rolar('1d20+3', fixo(20))!)).toBe(20);
     expect(d20Natural(rolar('2d20', fixo(20, 1))!)).toBeNull();
     expect(d20Natural(rolar('1d8', fixo(8))!)).toBeNull();
+  });
+});
+
+describe('ehCritico', () => {
+  it('respeita a margem', () => {
+    expect(ehCritico(rolar('1d20+5', fixo(20))!)).toBe(true);
+    expect(ehCritico(rolar('1d20+5', fixo(19))!)).toBe(false);
+    expect(ehCritico(rolar('1d20+5', fixo(19))!, 19)).toBe(true);
+    expect(ehCritico(rolar('1d20+5', fixo(18))!, 19)).toBe(false);
   });
 });
 

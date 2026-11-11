@@ -9,9 +9,15 @@ Para refazer a comparação de textos: `node scripts/comparar-regras.mjs <caminh
 - Os números do bestiário batem com a fórmula de ameaças por nível.
 - Conferidas à mão e iguais: Ranks (nível, atributo, custo em PH, BR, requisito de item, preço), raridades de item, Rank e tipo de Portal, armas, armaduras, encontros.
 
-## Cálculo da ficha: decisões pendentes
+## Cálculo da ficha: decidido em 2026-11-11
 
-O motor portado (`src/regras/ficha.ts`) faz exatamente o que o site original faz. Os pontos abaixo são regras do livro que o site **não** aplica automaticamente. Nenhum foi alterado ainda.
+Regras do livro que o site original **não** aplicava automaticamente. Todas as propostas abaixo foram aprovadas e implementadas em `src/regras/ficha.ts`, com testes em `src/regras/ficha.test.ts`.
+
+Interpretações adotadas na margem de crítico:
+- "Margem 19–20" (Domínio de Armas nv3, Katana com Refino +5, Arqueiro Nato nv5) define o ponto de partida; vale a melhor delas.
+- "Margem +1" (Letal, Ponto Vital) amplia a partir desse ponto e soma entre si. Ex.: Domínio nv3 + Letal = 18–20.
+- Domínio de Armas vale só para armas corpo a corpo (não para o desarmado). Ponto Vital vale para todos os ataques, inclusive o desarmado.
+- Margens que dependem da cena (Olhos de Caçador e Ponto Fraco contra alvos analisados) não entram no cálculo fixo; serão tratadas no combate.
 
 | # | Regra no livro | O que o site faz hoje | Proposta |
 |---|---|---|---|
@@ -21,4 +27,6 @@ O motor portado (`src/regras/ficha.ts`) faz exatamente o que o site original faz
 | 4 | **Olho de Falcão**: "+2 em Percepção visual". | Soma em toda a Percepção. | Manter e mostrar a observação "visual" na perícia. |
 | 5 | **Domínio de Armas** nv3/nv5, **Letal**, **Arqueiro Nato** nv5 etc.: margem de crítico 19–20 ou 18–20. | Não mostra a margem de crítico. | Calcular e mostrar a margem de crítico em cada ataque, e a rolagem marcar o crítico sozinha. |
 
-Responda cada item com "sim", "não" ou outra ideia; o que for decidido vira código com teste.
+Na ficha calculada: `rdFisico` traz a RD só contra físico, `perVisual` a Percepção para visão e `critico` em cada ataque o menor d20 natural que é crítico.
+
+Os itens 1, 2 e 5 também afetam o site original; vale avisar o autor.

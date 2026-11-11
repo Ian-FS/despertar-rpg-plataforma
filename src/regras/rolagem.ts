@@ -79,6 +79,12 @@ export function d20Natural(r: Rolagem): number | null {
   return p.tipo === 'dado' && p.qtd === 1 ? p.resultados[0] : null;
 }
 
+/** O ataque é crítico se o d20 natural estiver na margem (ex.: margem 19 → 19 ou 20). */
+export function ehCritico(r: Rolagem, margem = 20): boolean {
+  const nat = d20Natural(r);
+  return nat !== null && nat >= margem;
+}
+
 /** Média de uma expressão de dado simples ("2d8" → 9). */
 export function mediaDado(expr: string | undefined): number {
   const m = /^(\d*)d(\d+)/.exec(expr ?? '');

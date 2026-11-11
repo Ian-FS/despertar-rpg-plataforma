@@ -207,7 +207,15 @@ export type ChaveBonus =
   | `res.${AtributoId}`
   | 'cd'
   | `per.${string}`
-  | 'semPenEsq';
+  | 'semPenEsq'
+  /** RD que só vale contra dano físico */
+  | 'rdFisico'
+  /** bônus de Percepção que só vale para a visão */
+  | 'percepcaoVisual'
+  /** ataque desarmado recebe o Bônus de Rank do personagem (Punhos de Ferro) */
+  | 'brDesarmado'
+  /** quantidade de d4 extras no dano à distância (Arqueiro Nato) */
+  | 'd4Dist';
 
 export type Bonus = Partial<Record<ChaveBonus, number>> & {
   /** dado do ataque desarmado (substitui, não soma) */

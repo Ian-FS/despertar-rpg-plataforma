@@ -70,7 +70,31 @@ export interface AtaqueCalculado {
   /** dano elemental extra dos afixos, ex.: "+2d4 fogo" */
   extra: string;
   dist?: boolean;
+  /** menor resultado natural do d20 que é crítico (20 = só 20 natural; 19 = 19–20) */
+  critico: number;
 }
+
+/** Margem de crítico de um ataque.
+ *  "Margem 19–20" (Domínio de Armas, Katana +5, Arqueiro Nato nv5) define o ponto de partida;
+ *  "margem +1" (Letal, Ponto Vital) amplia a partir dele, cumulativamente. */
+function margemCritico(p: Personagem, it: Item | null, dist: boolean): number {
+  let base = 20;
+  const dominio = possui(p, ID.dominioDeArmas);
+  if (it && !dist && dominio) base = Math.min(base, dominio.nv >= 5 ? 18 : dominio.nv >= 3 ? 19 : 20);
+  if (it?.base === 'Katana' && Number(it.refino || 0) >= 5) base = Math.min(base, 19);
+  if (dist && p.despertar.id === ID.arqueiroNato && p.despertar.nv >= 5) base = Math.min(base, 19);
+  let amplia = 0;
+  if (it?.afixos.some((a) => a.n === 'Letal')) amplia += ['A', 'S'].includes(brItem(it, p).rank) ? 2 : 1;
+  if (possui(p, ID.pontoVital)) amplia += 1;
+  return base - amplia;
+}
+
+/** Ids usados em regras especiais do cálculo. */
+const ID = {
+  dominioDeArmas: 'lam1',
+  pontoVital: 'vul7',
+  arqueiroNato: 'd08',
+} as const;
 
 export interface FichaCalculada {
   nivel: number;
@@ -91,7 +115,12 @@ export interface FichaCalculada {
   /** bônus de Esquivar */
   esq: number;
   defPassiva: number;
+  /** RD contra todo dano */
   rd: number;
+  /** RD adicional que só vale contra dano físico (Pele Resistente abaixo do nível 3) */
+  rdFisico: number;
+  /** Percepção quando o teste é de visão (inclui Olho de Falcão) */
+  perVisual: number;
   res: Record<AtributoId, number>;
   cd: Record<AtributoId, number>;
   /** bônus total de cada perícia */
@@ -145,16 +174,20 @@ export function computarFicha(p: Personagem): FichaCalculada {
   for (const pc of PERICIAS) per[pc.n] = m[pc.a] + Number(p.pericias[pc.n] || 0) + g(`per.${pc.n}`);
 
   const meioN = Math.floor(n / 2);
+  // Punhos de Ferro: o desarmado recebe o Bônus de Rank do Rank do personagem
+  const brDesarmado = g('brDesarmado') ? RANKS[rankDoNivel(n)].br : 0;
   const ataques: AtaqueCalculado[] = [
     {
       id: 'desarmado',
       nome: 'Desarmado',
-      atk: n + m.FOR + g('atk') + g('atkCaC'),
+      atk: n + m.FOR + brDesarmado + g('atk') + g('atkCaC'),
       dado: b.desarmado ?? '1d4',
-      bonus: m.FOR + meioN + g('dano') + g('danoCaC'),
+      bonus: m.FOR + meioN + 2 * brDesarmado + g('dano') + g('danoCaC'),
       extra: '',
+      critico: margemCritico(p, null, false),
     },
   ];
+  const d4Dist = g('d4Dist');
   for (const it of eq.filter((i) => i.cat === 'arma')) {
     const { br } = brItem(it, p);
     const mm = it.atr ? m[it.atr] : 0;
@@ -170,11 +203,12 @@ export function computarFicha(p: Personagem): FichaCalculada {
       id: it.uid,
       nome: it.nome,
       atk: n + mm + br + ref + g('atk') + (dist ? g('atkDist') : g('atkCaC')) + (temAfixo('Afiada') ? X : 0),
-      dado: it.dano || '1d6',
+      dado: (it.dano || '1d6') + (dist && d4Dist ? `+${d4Dist}d4` : ''),
       bonus:
         mm + meioN + 2 * br + ref + g('dano') + (dist ? g('danoDist') : g('danoCaC')) + (temAfixo('Brutal') ? 2 * X : 0),
       extra,
       dist,
+      critico: margemCritico(p, it, dist),
     });
   }
 
@@ -193,6 +227,8 @@ export function computarFicha(p: Personagem): FichaCalculada {
     esq: n + m.AGI + pen + g('esq'),
     defPassiva: 10 + defArm,
     rd: rdArm + g('rd'),
+    rdFisico: g('rdFisico'),
+    perVisual: per['Percepção'] + g('percepcaoVisual'),
     res,
     cd,
     per,
