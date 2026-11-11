@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { TelaCarregando } from '@/componentes/efeitos/carregando';
 import { aceitarConvite } from '../../acoes';
 
 export function BotaoAceitar({ codigo }: { codigo: string }) {
@@ -8,6 +9,7 @@ export function BotaoAceitar({ codigo }: { codigo: string }) {
   const [pendente, iniciar] = useTransition();
   return (
     <div className="flex flex-col gap-2">
+      {pendente && <TelaCarregando texto="Entrando na mesa" />}
       <button
         type="button"
         className="botao"

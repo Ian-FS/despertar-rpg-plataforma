@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { CartaoDespertar } from '@/componentes/cartoes';
+import { useEfeitos } from '@/componentes/efeitos/provedor';
 import type { EtapaFicha, RegrasMesa, SorteioLinha } from '@/lib/supabase/tipos-banco';
 import { DISTRIBUICAO_PADRAO } from '@/regras/criacao';
 import { ATRIBUTOS, DESP, HAB } from '@/regras/dados';
@@ -36,11 +37,29 @@ export function Criacao(props: {
   const { fichaId, etapa, p, regras } = props;
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
-  const executar = (fn: () => Promise<Resultado>) =>
+  const efeitos = useEfeitos();
+  const executar = (fn: () => Promise<Resultado>, depois?: (r: Resultado) => Promise<void> | void) =>
     iniciar(async () => {
       setErro(null);
       const r = await fn();
-      if (r.erro) setErro(r.erro);
+      if (r.erro) {
+        setErro(r.erro);
+        efeitos.som('falha');
+      } else await depois?.(r);
+    });
+  const revelarAtributos = async (r: Resultado) => {
+    if (r.atributos) await efeitos.abrir({ tipo: 'atributos', dados: r.atributos });
+  };
+  const revelarDespertar = async (r: Resultado) => {
+    if (r.despertar) await efeitos.abrir({ tipo: 'despertar', ...r.despertar });
+  };
+  const despertou = (id: string) =>
+    efeitos.abrir({
+      tipo: 'notificacao',
+      cabecalho: '[ SISTEMA ]',
+      titulo: 'Você despertou.',
+      linhas: [`Habilidade Única: ${DESP[id].n} (${DESP[id].rar})`],
+      tom: ['Lendário', 'Anomalia'].includes(DESP[id].rar) ? 'ouro' : 'sys',
     });
   const n = PASSOS.findIndex((x) => x.etapa === etapa);
 
@@ -65,7 +84,7 @@ export function Criacao(props: {
 
       {etapa === 'atributos' &&
         (regras.metodoPadrao ? (
-          <MetodoPadrao enviar={(b) => executar(() => metodoPadraoAcao(fichaId, b))} ocupado={pendente} />
+          <MetodoPadrao enviar={(b) => executar(() => metodoPadraoAcao(fichaId, b), () => efeitos.aviso('[ SISTEMA ] Atributos registrados.'))} ocupado={pendente} />
         ) : (
           <section className="janela flex flex-col gap-3 p-5">
             <p className="font-mono text-xs uppercase tracking-[0.2em] text-sys">[ SISTEMA ] Medição de potencial</p>
@@ -74,7 +93,7 @@ export function Criacao(props: {
               fraco recebe mais Pontos de Status e PH. O resultado fica registrado e não pode ser rolado de novo sem o
               Mestre.
             </p>
-            <button className="botao self-start" disabled={pendente} onClick={() => executar(() => sortearAtributosAcao(fichaId))}>
+            <button className="botao self-start" disabled={pendente} onClick={() => executar(() => sortearAtributosAcao(fichaId), revelarAtributos)}>
               {pendente ? 'Rolando…' : '🎲 Sortear Potencial e Atributos'}
             </button>
           </section>
@@ -90,7 +109,7 @@ export function Criacao(props: {
                   key={id}
                   x={DESP[id]}
                   rodape={
-                    <button className="botao mt-2 self-start" disabled={pendente} onClick={() => executar(() => escolherDespertarAcao(fichaId, id))}>
+                    <button className="botao mt-2 self-start" disabled={pendente} onClick={() => executar(() => escolherDespertarAcao(fichaId, id), () => despertou(id))}>
                       Escolher {DESP[id].n}
                     </button>
                   }
@@ -105,7 +124,7 @@ export function Criacao(props: {
               O Sistema rola <b>1d100</b> na tabela de Despertares: sua Habilidade Única.
               {regras.escolhaGuiada && ' Nesta mesa, você rola duas vezes e escolhe.'} Comuns e Raros vêm com compensação.
             </p>
-            <button className="botao self-start" disabled={pendente} onClick={() => executar(() => sortearDespertarAcao(fichaId))}>
+            <button className="botao self-start" disabled={pendente} onClick={() => executar(() => sortearDespertarAcao(fichaId), revelarDespertar)}>
               {pendente ? 'Rolando…' : '✦ Sortear Despertar'}
             </button>
           </section>

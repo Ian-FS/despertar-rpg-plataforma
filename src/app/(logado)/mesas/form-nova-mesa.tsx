@@ -1,12 +1,14 @@
 'use client';
 
 import { useActionState } from 'react';
+import { TelaCarregando } from '@/componentes/efeitos/carregando';
 import { criarMesa } from '../acoes';
 
 export function FormNovaMesa() {
   const [estado, acao, enviando] = useActionState(criarMesa, {});
   return (
     <form action={acao} className="flex flex-col gap-2">
+      {enviando && <TelaCarregando texto="Abrindo um novo Portal" />}
       <div className="flex flex-wrap gap-2">
         <label htmlFor="nome-mesa" className="sr-only">
           Nome da mesa

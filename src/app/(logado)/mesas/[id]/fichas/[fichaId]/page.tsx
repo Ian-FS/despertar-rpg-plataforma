@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { Carregando } from '@/componentes/efeitos/carregando';
 import { REGRAS_PADRAO } from '@/lib/fichas/regras-padrao';
 import { clienteServidor, usuarioAtual } from '@/lib/supabase/servidor';
 import type { Personagem } from '@/regras/personagem';
@@ -14,7 +15,7 @@ import { SorteiosLiberados } from './sorteios-liberados';
 export default function PaginaFicha({ params }: PageProps<'/mesas/[id]/fichas/[fichaId]'>) {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
-      <Suspense fallback={<p className="text-apagado">Carregando ficha…</p>}>
+      <Suspense fallback={<Carregando texto="Abrindo a Janela de Status" />}>
         <Conteudo params={params} />
       </Suspense>
     </main>

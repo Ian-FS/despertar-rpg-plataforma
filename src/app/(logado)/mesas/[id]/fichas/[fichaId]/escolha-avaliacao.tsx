@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { CartaoHabilidade } from '@/componentes/cartoes';
+import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { HAB } from '@/regras/dados';
 import { escolherAvaliacaoAcao } from '../acoes';
 
@@ -9,6 +10,7 @@ import { escolherAvaliacaoAcao } from '../acoes';
 export function EscolhaAvaliacao({ fichaId, rank, opcoes, inicial }: { fichaId: string; rank: string; opcoes: string[]; inicial?: boolean }) {
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
+  const efeitos = useEfeitos();
   return (
     <section className="janela flex flex-col gap-4 p-5">
       <div>
@@ -19,9 +21,9 @@ export function EscolhaAvaliacao({ fichaId, rank, opcoes, inicial }: { fichaId: 
         </p>
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
-        {opcoes.map((id) => (
+        {opcoes.map((id, i) => (
+          <div key={id} className="carta-virar flex flex-col" style={{ animationDelay: `${i * 220}ms` }}>
           <CartaoHabilidade
-            key={id}
             h={HAB[id]}
             rodape={
               <button
@@ -31,6 +33,16 @@ export function EscolhaAvaliacao({ fichaId, rank, opcoes, inicial }: { fichaId: 
                   iniciar(async () => {
                     const r = await escolherAvaliacaoAcao(fichaId, id);
                     setErro(r.erro ?? null);
+                    if (r.erro) return efeitos.som('falha');
+                    await efeitos.abrir({ tipo: 'notificacao', cabecalho: '[ SISTEMA ]', titulo: 'Habilidade adquirida.', linhas: [`${HAB[id].n} · Rank ${HAB[id].r} · nível 1`] });
+                    if (inicial)
+                      await efeitos.abrir({
+                        tipo: 'notificacao',
+                        cabecalho: '[ NOTIFICAÇÃO ]',
+                        titulo: 'Registro concluído. Bem-vindo, Jogador.',
+                        linhas: ['Na ficha: distribua os Pontos de Status, gaste os PH e escolha as perícias.'],
+                        tom: 'ouro',
+                      });
                   })
                 }
               >
@@ -38,6 +50,7 @@ export function EscolhaAvaliacao({ fichaId, rank, opcoes, inicial }: { fichaId: 
               </button>
             }
           />
+          </div>
         ))}
       </div>
       {erro && (

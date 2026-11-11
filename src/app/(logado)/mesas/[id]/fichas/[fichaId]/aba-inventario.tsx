@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { useRolar } from '@/componentes/rolador';
 import { ACESSORIOS, AFIXOS, ARMADURAS, ARMAS, CONSUMIVEIS, RANKS, RARIDADES, SELOS } from '@/regras/dados';
 import { brItem } from '@/regras/ficha';
@@ -59,14 +60,38 @@ export function AbaInventario(props: PropsAba) {
   );
 }
 
-function LinhaItem({ it, p, alterar, podeEditar, mudar }: PropsAba & { it: Item; mudar: (fn: (it: Item) => void) => void }) {
+function LinhaItem({ it, p, f, alterar, podeEditar, mudar }: PropsAba & { it: Item; mudar: (fn: (it: Item) => void) => void }) {
   const rolar = useRolar();
+  const efeitos = useEfeitos();
+
+  /** usa o consumível: rola, aplica em PV ou PM e gasta uma unidade */
+  const usar = () => {
+    const r = rolar(it.nome, it.usoDado!);
+    if (!r) return;
+    const alvo = it.usoAlvo;
+    if (!podeEditar || !alvo) return;
+    const campo = alvo === 'pm' ? 'pmAtual' : 'pvAtual';
+    const max = alvo === 'pm' ? f.pmMax : f.pvMax;
+    const atual = p[campo] ?? max;
+    const novo = Math.min(max, atual + r.total);
+    alterar((x) => {
+      x[campo] = novo;
+      const item = x.itens.find((i) => i.uid === it.uid);
+      if (item) {
+        item.qtd = (item.qtd ?? 1) - 1;
+        if (item.qtd <= 0) x.itens = x.itens.filter((i) => i.uid !== it.uid);
+      }
+    });
+    efeitos.som('cura');
+    efeitos.aviso(`[ SISTEMA ] ${it.nome}: +${novo - atual} ${alvo.toUpperCase()} (${atual} → ${novo})`, 'ok');
+  };
   const [aberto, setAberto] = useState(false);
   const { br, rank, semReq } = brItem(it, p);
   const equipavel = ['arma', 'armadura', 'escudo', 'acessorio'].includes(it.cat);
   const cat = catAfixo(it.cat);
 
-  const equipar = () =>
+  const equipar = () => {
+    efeitos.som('clique');
     alterar((r) => {
       const alvo = r.itens.find((i) => i.uid === it.uid)!;
       // só uma armadura e um escudo equipados por vez
@@ -74,6 +99,7 @@ function LinhaItem({ it, p, alterar, podeEditar, mudar }: PropsAba & { it: Item;
         r.itens.forEach((i) => i.cat === alvo.cat && (i.equip = false));
       alvo.equip = !alvo.equip;
     });
+  };
 
   return (
     <li className="caixa flex flex-col" style={{ borderLeftColor: corRaridade(it.rar), borderLeftWidth: 3 }}>
@@ -92,7 +118,7 @@ function LinhaItem({ it, p, alterar, podeEditar, mudar }: PropsAba & { it: Item;
           </span>
         </button>
         {it.usoDado && (
-          <button className="botao botao-discreto px-2 py-0.5 text-xs" onClick={() => rolar(it.nome, it.usoDado!)}>
+          <button className="botao botao-discreto px-2 py-0.5 text-xs" onClick={usar} title={it.usoAlvo ? `Rola ${it.usoDado}, recupera ${it.usoAlvo.toUpperCase()} e gasta 1 unidade` : undefined}>
             Usar · {it.usoDado}
           </button>
         )}
@@ -241,7 +267,8 @@ function NovoItem({ onAdicionar }: { onAdicionar: (it: Item) => void }) {
         const c = CONSUMIVEIS.find((x) => x.n === (base || CONSUMIVEIS[0].n))!;
         const br = RANKS[rank].br;
         const uso = c.n === 'Poção de Cura' ? `${2 + 2 * br}d8` : c.n === 'Poção de Mana' ? `${2 + 2 * br}d6` : undefined;
-        return itemBase('consumivel', `${nomeLivre || c.n} (Rank ${rank})`, { rank, qtd: 1, linhas: [c.desc], usoDado: uso });
+        const alvo = c.n === 'Poção de Cura' ? 'pv' : c.n === 'Poção de Mana' ? 'pm' : undefined;
+        return itemBase('consumivel', `${nomeLivre || c.n} (Rank ${rank})`, { rank, qtd: 1, linhas: [c.desc], usoDado: uso, usoAlvo: alvo });
       }
       default:
         return nomeLivre ? itemBase('outro', nomeLivre, { qtd: 1 }) : null;

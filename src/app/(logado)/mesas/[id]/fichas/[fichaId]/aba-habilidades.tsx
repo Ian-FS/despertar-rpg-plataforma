@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CartaoDespertar, CartaoHabilidade, COR_RANK } from '@/componentes/cartoes';
+import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { ARVORES, DESP, HAB, HABILIDADES } from '@/regras/dados';
 import {
   afinidades,
@@ -15,6 +16,13 @@ import {
 } from '@/regras/ficha';
 import { RANK_IDS, type ArvoreId, type Habilidade } from '@/regras/tipos';
 import type { PropsAba } from './ficha-editor';
+
+/** Aviso do Sistema ao evoluir: mostra o marco dos níveis 3 e 5. */
+function anunciarNivel(efeitos: ReturnType<typeof useEfeitos>, nome: string, nv: number, m3: string, m5: string) {
+  efeitos.som(nv === 3 || nv === 5 ? 'raro' : 'sistema');
+  const marco = nv === 3 ? ` · ${m3}` : nv === 5 ? ` · ${m5}` : '';
+  efeitos.aviso(`[ SISTEMA ] ${nome} subiu para o nível ${nv}${marco}`, nv === 5 ? 'ouro' : 'sys');
+}
 
 export function AbaHabilidades(props: PropsAba) {
   const { p } = props;
@@ -39,6 +47,7 @@ export function AbaHabilidades(props: PropsAba) {
 }
 
 function Despertar({ p, alterar, podeEditar }: PropsAba) {
+  const efeitos = useEfeitos();
   const x = DESP[p.despertar.id];
   if (!x) return null;
   const nv = p.despertar.nv;
@@ -52,7 +61,7 @@ function Despertar({ p, alterar, podeEditar }: PropsAba) {
           <span className="font-semibold">Nível {nv} de 5</span>
           {gratis > 0 && <span className="text-xs text-apagado">({gratis} nível(is) grátis pelos novos Ranks)</span>}
           {podeEditar && nv < 5 && (
-            <button className="botao px-3 py-1 text-sm" disabled={custo > phDisponiveis(p)} onClick={() => alterar((r) => void r.despertar.nv++)}>
+            <button className="botao px-3 py-1 text-sm" disabled={custo > phDisponiveis(p)} onClick={() => (alterar((r) => void r.despertar.nv++), anunciarNivel(efeitos, x.n, nv + 1, x.m3, x.m5))}>
               Evoluir para nv {nv + 1} · {custo ? `${custo} PH` : 'grátis'}
             </button>
           )}
@@ -69,6 +78,7 @@ function Despertar({ p, alterar, podeEditar }: PropsAba) {
 
 function Minhas({ p, alterar, podeEditar }: PropsAba) {
   const [aberta, setAberta] = useState<string | null>(null);
+  const efeitos = useEfeitos();
   if (!p.habs.length)
     return <p className="text-sm text-apagado">Nenhuma habilidade ainda. Escolha nas árvores abaixo.</p>;
   const ph = phDisponiveis(p);
@@ -98,7 +108,7 @@ function Minhas({ p, alterar, podeEditar }: PropsAba) {
                   <button
                     className="botao px-2 py-0.5 text-xs"
                     disabled={x.nv + 1 > ph}
-                    onClick={() => alterar((r) => void r.habs.find((y) => y.id === x.id)!.nv++)}
+                    onClick={() => (alterar((r) => void r.habs.find((y) => y.id === x.id)!.nv++), anunciarNivel(efeitos, h.n, x.nv + 1, h.m3, h.m5))}
                   >
                     nv {x.nv + 1} · {x.nv + 1} PH
                   </button>
@@ -128,6 +138,7 @@ function Minhas({ p, alterar, podeEditar }: PropsAba) {
 }
 
 function Arvores({ p, alterar, podeEditar }: PropsAba) {
+  const efeitos = useEfeitos();
   const afins = afinidades(p);
   const [arvore, setArvore] = useState<ArvoreId>(afins[0] ?? 'lamina');
   const [sel, setSel] = useState<string | null>(null);
@@ -179,7 +190,11 @@ function Arvores({ p, alterar, podeEditar }: PropsAba) {
                 <Comprar
                   h={h}
                   {...{ p, ph, podeEditar }}
-                  onComprar={() => alterar((r) => void r.habs.push({ id: h.id, nv: 1, gratis: false }))}
+                  onComprar={() => {
+                    alterar((r) => void r.habs.push({ id: h.id, nv: 1, gratis: false }));
+                    efeitos.som('sistema');
+                    efeitos.aviso(`[ SISTEMA ] Habilidade adquirida: ${h.n}`);
+                  }}
                 />
               }
             />

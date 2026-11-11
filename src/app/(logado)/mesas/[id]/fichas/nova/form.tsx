@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { TelaCarregando } from '@/componentes/efeitos/carregando';
 import { ARMAS } from '@/regras/dados';
 import { criarFicha } from '../acoes';
 
@@ -8,6 +9,7 @@ export function FormNovaFicha({ mesaId }: { mesaId: string }) {
   const [estado, acao, enviando] = useActionState(criarFicha.bind(null, mesaId), {});
   return (
     <form action={acao} className="caixa flex flex-col gap-4 p-4">
+      {enviando && <TelaCarregando texto="Registrando novo Jogador" />}
       <Campo id="nome" rotulo="Nome do personagem">
         <input id="nome" name="nome" className="campo" maxLength={80} required placeholder="Ex.: Rafa Moreira" />
       </Campo>

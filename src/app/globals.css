@@ -93,3 +93,242 @@ body {
   outline: 2px solid var(--color-sys);
   outline-offset: 2px;
 }
+
+/* ================================================================
+   EFEITOS DE JOGO
+   Tudo é desligado por "reduzir movimento" (fim do arquivo).
+   ================================================================ */
+
+/* botões: brilho ao passar o mouse e pulso ao clicar */
+.botao {
+  transition: background 0.15s, box-shadow 0.2s, transform 0.08s;
+}
+.botao:not(:disabled):hover {
+  box-shadow: 0 0 14px rgb(92 200 255 / 0.35);
+}
+.botao:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+/* janela do Sistema */
+.janela-sistema {
+  border: 1px solid var(--cor-janela, var(--color-sys));
+  background: linear-gradient(180deg, rgb(16 25 53 / 0.97), rgb(10 15 30 / 0.97));
+  box-shadow: 0 0 0 1px rgb(92 200 255 / 0.15), 0 0 48px var(--brilho-janela, rgb(92 200 255 / 0.28));
+  animation: janela-abrir 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  overflow: hidden;
+}
+.janela-sys { --cor-janela: var(--color-sys); --brilho-janela: rgb(92 200 255 / 0.28); }
+.janela-ouro { --cor-janela: var(--color-ouro); --brilho-janela: rgb(232 182 76 / 0.3); }
+.janela-ok { --cor-janela: var(--color-ok); --brilho-janela: rgb(95 211 154 / 0.25); }
+.janela-perigo { --cor-janela: var(--color-perigo); --brilho-janela: rgb(255 112 112 / 0.3); }
+.cabecalho-sistema { color: var(--cor-janela, var(--color-sys)); }
+.titulo-sistema { text-shadow: 0 0 18px rgb(92 200 255 / 0.45); }
+.titulo-nivel {
+  color: var(--color-ouro);
+  text-shadow: 0 0 20px rgb(232 182 76 / 0.6);
+  animation: pulso-titulo 1.6s ease-in-out infinite;
+}
+.sobreposicao { animation: aparecer 0.2s ease-out; }
+
+@keyframes janela-abrir {
+  from { opacity: 0; transform: scale(0.92) translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pulso-titulo {
+  50% { text-shadow: 0 0 34px rgb(232 182 76 / 0.9); }
+}
+
+/* linhas de varredura que descem pela janela */
+.linhas-varredura {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgb(92 200 255 / 0.08) 50%, transparent 100%);
+  background-size: 100% 40%;
+  background-repeat: no-repeat;
+  animation: varredura 2.6s linear infinite;
+}
+@keyframes varredura {
+  from { background-position: 0 -40%; }
+  to { background-position: 0 140%; }
+}
+
+/* elementos que surgem (usar com animation-delay) */
+.aparecer {
+  opacity: 0;
+  animation: aparecer 0.35s ease-out forwards;
+}
+@keyframes aparecer {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.aparecer-sumir { animation: aparecer-sumir 1.3s ease-in-out forwards; }
+@keyframes aparecer-sumir {
+  0% { opacity: 0; }
+  15%, 80% { opacity: 1; }
+  100% { opacity: 0; height: 0; margin: 0; overflow: hidden; }
+}
+
+/* número que acabou de parar de girar */
+.numero-parou { display: inline-block; animation: parou 0.3s ease-out; }
+@keyframes parou {
+  0% { transform: scale(1.35); color: var(--color-texto); }
+  100% { transform: none; }
+}
+.dado-mini {
+  display: inline-grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 1px solid var(--color-linha);
+  background: var(--color-painel-2);
+  color: var(--color-sys);
+  font-weight: 700;
+}
+
+/* cursor do texto digitado */
+.cursor-digitando { animation: piscar 0.7s steps(1) infinite; color: var(--color-sys); }
+@keyframes piscar { 50% { opacity: 0; } }
+
+/* barras de carregamento e escaneamento */
+.barra-carregando, .barra-escaneando { position: relative; overflow: hidden; }
+.barra-carregando::after, .barra-escaneando::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--color-sys), transparent);
+  animation: correr 1.1s ease-in-out infinite;
+}
+@keyframes correr {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+.pontos-carregando::after { content: ''; animation: pontos 1.2s steps(4) infinite; }
+@keyframes pontos {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+/* raridades do Despertar */
+.revelacao { background: rgb(10 15 30 / 0.6); }
+.rar-raro { box-shadow: 0 0 18px rgb(74 168 255 / 0.35); }
+.rar-epico { box-shadow: 0 0 26px rgb(176 108 255 / 0.5); }
+.rar-lendario {
+  box-shadow: 0 0 34px rgb(255 179 64 / 0.6);
+  background: linear-gradient(110deg, rgb(10 15 30 / 0.6) 40%, rgb(255 179 64 / 0.18) 50%, rgb(10 15 30 / 0.6) 60%);
+  background-size: 250% 100%;
+  animation-name: aparecer, brilho-lendario;
+  animation-duration: 0.35s, 2.2s;
+  animation-iteration-count: 1, infinite;
+  animation-fill-mode: forwards, none;
+}
+@keyframes brilho-lendario {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
+}
+.rar-anomalia { box-shadow: 0 0 34px rgb(255 77 109 / 0.6); }
+.rar-anomalia [data-texto] { position: relative; animation: glitch 2.4s infinite; }
+@keyframes glitch {
+  0%, 88%, 100% { transform: none; text-shadow: none; }
+  90% { transform: translateX(-2px); text-shadow: 2px 0 #5cc8ff, -2px 0 #ff4d6d; }
+  93% { transform: translateX(2px); text-shadow: -2px 0 #5cc8ff, 2px 0 #ff4d6d; }
+  96% { transform: translateX(-1px); }
+}
+
+/* partículas da subida de nível */
+.particulas { pointer-events: none; position: absolute; inset: 0; }
+.particulas i {
+  position: absolute;
+  bottom: -6px;
+  border-radius: 50%;
+  background: var(--color-ouro);
+  box-shadow: 0 0 6px var(--color-ouro);
+  opacity: 0;
+  animation: subir-particula linear infinite;
+}
+@keyframes subir-particula {
+  0% { opacity: 0; transform: translateY(0); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-360px); }
+}
+
+/* avisos rápidos do Sistema (topo da tela) */
+.aviso-sistema { animation: aviso 3.2s ease-in-out forwards; }
+.aviso-ok { border-color: var(--color-ok); color: var(--color-ok); }
+.aviso-perigo { border-color: var(--color-perigo); color: var(--color-perigo); }
+.aviso-ouro { border-color: var(--color-ouro); color: var(--color-ouro); }
+.aviso-sys { color: var(--color-texto); }
+@keyframes aviso {
+  0% { opacity: 0; transform: translateY(-10px); }
+  8%, 85% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
+/* números flutuantes de dano e cura */
+.flutuante {
+  position: absolute;
+  right: 0;
+  top: -0.4rem;
+  font-weight: 800;
+  font-size: 1.1rem;
+  pointer-events: none;
+  animation: flutuar 1.1s ease-out forwards;
+}
+@keyframes flutuar {
+  from { opacity: 1; transform: translateY(0) scale(1.2); }
+  to { opacity: 0; transform: translateY(-28px) scale(1); }
+}
+.flash-dano { animation: flash-dano 0.45s ease-out; }
+@keyframes flash-dano {
+  0% { box-shadow: inset 0 0 0 999px rgb(255 112 112 / 0.25); }
+  100% { box-shadow: none; }
+}
+.flash-cura { animation: flash-cura 0.6s ease-out; }
+@keyframes flash-cura {
+  0% { box-shadow: 0 0 18px rgb(95 211 154 / 0.7); }
+  100% { box-shadow: none; }
+}
+.barra-valor { transition: width 0.5s cubic-bezier(0.2, 0.8, 0.3, 1); }
+
+/* rolagens: crítico e falha */
+.rolagem-critico { animation: critico 0.7s ease-out; border-color: var(--color-ouro) !important; }
+@keyframes critico {
+  0% { box-shadow: 0 0 0 0 rgb(232 182 76 / 0.9); transform: scale(1.06); }
+  100% { box-shadow: 0 0 0 22px rgb(232 182 76 / 0); transform: none; }
+}
+.rolagem-falha { animation: tremer 0.4s ease-in-out; border-color: var(--color-perigo) !important; }
+@keyframes tremer {
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+
+/* cartas da Avaliação do Sistema virando */
+.carta-virar {
+  animation: virar 0.55s cubic-bezier(0.3, 0.8, 0.3, 1) backwards;
+  transform-origin: center;
+}
+@keyframes virar {
+  0% { opacity: 0; transform: perspective(800px) rotateY(90deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+/* algo acabou de mudar (ex.: atributo recebeu ponto) */
+.pulso { animation: pulso 0.35s ease-out; }
+@keyframes pulso {
+  0% { box-shadow: 0 0 0 0 rgb(92 200 255 / 0.7); }
+  100% { box-shadow: 0 0 0 10px rgb(92 200 255 / 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .aparecer { opacity: 1; }
+  .particulas, .linhas-varredura { display: none; }
+}

@@ -135,7 +135,7 @@ export function FichaEditor({
 
 function IndicadorSalvo({ estado }: { estado: Estado }) {
   const txt: Record<Estado, string> = {
-    salvo: '✓ salvo',
+    salvo: '✓ sincronizado com o Sistema',
     pendente: 'alterado…',
     salvando: 'salvando…',
     invalido: 'não salvo: corrija os erros',

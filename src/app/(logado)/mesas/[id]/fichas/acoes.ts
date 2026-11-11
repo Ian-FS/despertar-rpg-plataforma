@@ -30,7 +30,10 @@ import {
   sortearSubidaNivel,
   validarMetodoPadrao,
 } from '@/regras/criacao';
+import type { DadosNivel } from '@/componentes/efeitos/revelacoes';
+import type { SorteioAtributos } from '@/regras/criacao';
 import { ARMAS } from '@/regras/dados';
+import { computarFicha } from '@/regras/ficha';
 import { novoPersonagem, type Personagem } from '@/regras/personagem';
 import { sortearCrypto } from '@/regras/rolagem';
 import { ATRIBUTO_IDS, type AtributoId } from '@/regras/tipos';
@@ -39,6 +42,10 @@ import { mesclarEdicaoJogador, normalizarPersonagem, resumoFicha, validarFicha }
 export interface Resultado {
   erro?: string;
   erros?: string[];
+  /** resultados para a tela animar */
+  atributos?: SorteioAtributos;
+  despertar?: { d100: number[]; opcoes: string[] };
+  nivel?: DadosNivel;
 }
 
 const caminhoFicha = (ctx: { mesaId: string; ficha: { id: string } }) => `/mesas/${ctx.mesaId}/fichas/${ctx.ficha.id}`;
@@ -129,7 +136,7 @@ export async function sortearAtributosAcao(fichaId: string): Promise<Resultado> 
     await registrarSorteio(ctx, 'atributos', r);
     await gravarFicha(fichaId, p, { etapa: await avancar(ctx, 'atributos', 'despertar'), sorteios_liberados: semLiberacao(ctx, 'atributos') });
     revalidatePath(caminhoFicha(ctx));
-    return {};
+    return { atributos: r };
   });
 }
 
@@ -166,7 +173,7 @@ export async function sortearDespertarAcao(fichaId: string): Promise<Resultado> 
       sorteios_liberados: semLiberacao(ctx, 'despertar'),
     });
     revalidatePath(caminhoFicha(ctx));
-    return {};
+    return { despertar: { d100: rolagens.map((r) => r.d100), opcoes } };
   });
 }
 
@@ -266,13 +273,26 @@ export async function subirNivelAcao(fichaId: string): Promise<Resultado> {
       return { erro: 'Para passar deste nível é preciso vencer a Provação de Ascensão. O Mestre libera.' };
     if (await sorteioPendente(ctx, 'avaliacao')) return { erro: 'Escolha a habilidade da Avaliação do Sistema antes de subir de novo.' };
 
+    const antes = computarFicha(p);
     const r = sortearSubidaNivel(sortearCrypto, p);
     aplicarSubidaNivel(p, r, ctx.regras);
+    const depois = computarFicha(p);
     await registrarSorteio(ctx, 'nivel', r);
     if (r.novoRank && r.avaliacao.length) await registrarSorteio(ctx, 'avaliacao', { rank: r.novoRank, opcoes: r.avaliacao, escolhida: null });
     await gravarFicha(fichaId, p);
     revalidatePath(caminhoFicha(ctx));
-    return {};
+    return {
+      nivel: {
+        nivelAntes: antes.nivel,
+        nivelDepois: depois.nivel,
+        status: r.status,
+        ph: r.ph,
+        novoRank: r.novoRank,
+        pv: [antes.pvMax, depois.pvMax],
+        pm: [antes.pmMax, depois.pmMax],
+        acoes: [antes.acoes, depois.acoes],
+      },
+    };
   });
 }
 

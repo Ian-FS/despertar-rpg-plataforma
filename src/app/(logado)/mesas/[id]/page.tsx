@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { Carregando } from '@/componentes/efeitos/carregando';
 import { clienteServidor, usuarioAtual } from '@/lib/supabase/servidor';
 import type { EtapaFicha, RegrasMesa, ResumoFicha } from '@/lib/supabase/tipos-banco';
 import { REGRAS_PADRAO } from '@/lib/fichas/regras-padrao';
@@ -14,7 +15,7 @@ export default function PaginaMesa({ params }: PageProps<'/mesas/[id]'>) {
       <Link href="/mesas" className="text-sm text-apagado hover:text-texto">
         ← Suas mesas
       </Link>
-      <Suspense fallback={<p className="text-apagado">Carregando…</p>}>
+      <Suspense fallback={<Carregando texto="Sincronizando com o Sistema" />}>
         <DetalheMesa params={params} />
       </Suspense>
     </main>

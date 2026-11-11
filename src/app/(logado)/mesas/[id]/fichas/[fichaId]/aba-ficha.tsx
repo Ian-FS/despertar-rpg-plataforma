@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { d20, sinal, useRolar } from '@/componentes/rolador';
 import { podeSubirNivel, xpParaSubir } from '@/regras/criacao';
 import { ATRIBUTOS, CONDICOES, DESP, PERICIAS, RARIDADE_DESPERTAR, TITULOS, TIT } from '@/regras/dados';
-import { phDisponiveis } from "@/regras/ficha";
+import { phDisponiveis } from '@/regras/ficha';
 import { ATRIBUTO_IDS } from '@/regras/tipos';
 import { subirNivelAcao } from '../acoes';
 import type { PropsAba } from './ficha-editor';
@@ -32,6 +33,7 @@ export function AbaFicha(props: PropsAba) {
 /* ---------------- cabeçalho: nome, nível, XP, Despertar ---------------- */
 
 function Cabecalho({ p, f, alterar, podeEditar, regras, fichaId, souMestre }: PropsAba) {
+  const efeitos = useEfeitos();
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
   const desp = DESP[p.despertar.id];
@@ -77,6 +79,8 @@ function Cabecalho({ p, f, alterar, podeEditar, regras, fichaId, souMestre }: Pr
                 iniciar(async () => {
                   const r = await subirNivelAcao(fichaId);
                   setErro(r.erro ?? null);
+                  if (r.erro) efeitos.som('falha');
+                  if (r.nivel) await efeitos.abrir({ tipo: 'nivel', dados: r.nivel });
                 })
               }
             >
@@ -120,25 +124,36 @@ function Pendencias({ p, f }: PropsAba) {
 /* ---------------- PV, PM, condições, descanso ---------------- */
 
 function VidaMana({ p, f, alterar, podeEditar }: PropsAba) {
+  const efeitos = useEfeitos();
   const pv = p.pvAtual ?? f.pvMax;
   const pm = p.pmAtual ?? f.pmMax;
   const condicoes = p.condicoes ? p.condicoes.split(',').map((c) => c.trim()).filter(Boolean) : [];
-  const ajustar = (campo: 'pvAtual' | 'pmAtual', atual: number, delta: number, max: number) =>
+  const ajustar = (campo: 'pvAtual' | 'pmAtual', atual: number, delta: number, max: number) => {
+    efeitos.som(delta < 0 ? 'dano' : 'cura');
+    if (campo === 'pvAtual' && atual > 0 && atual + delta <= 0)
+      efeitos.aviso('[ AVISO ] PV a zero: você está Incapacitado.', 'perigo');
     alterar((r) => {
       const v = atual + delta;
       r[campo] = campo === 'pmAtual' ? Math.max(0, Math.min(max, v)) : Math.min(max, v);
     });
-  const descansoCurto = () =>
+  };
+  const descansoCurto = () => {
+    efeitos.som('cura');
+    efeitos.aviso('[ SISTEMA ] Descanso curto: 1/4 dos PV e PM recuperados.', 'ok');
     alterar((r) => {
       r.pvAtual = Math.min(f.pvMax, pv + Math.floor(f.pvMax / 4));
       r.pmAtual = Math.min(f.pmMax, pm + Math.floor(f.pmMax / 4));
     });
-  const descansoLongo = () =>
+  };
+  const descansoLongo = () => {
+    efeitos.som('cura');
+    efeitos.aviso('[ SISTEMA ] Descanso longo: PV e PM restaurados.', 'ok');
     alterar((r) => {
       r.pvAtual = f.pvMax;
       r.pmAtual = f.pmMax;
       r.condicoes = condicoes.filter((c) => c !== 'Exausto').join(', ');
     });
+  };
   const alternarCondicao = (c: string) =>
     alterar((r) => {
       r.condicoes = (condicoes.includes(c) ? condicoes.filter((x) => x !== c) : [...condicoes, c]).join(', ');
@@ -192,19 +207,38 @@ function VidaMana({ p, f, alterar, podeEditar }: PropsAba) {
   );
 }
 
+let seqFlutuante = 0;
+
 function Barra({ rotulo, atual, max, cor, alerta }: { rotulo: string; atual: number; max: number; cor: string; alerta: string | null }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (atual / max) * 100)) : 0;
+  // guarda o valor anterior para mostrar "+14" / "−11" flutuando quando muda
+  const [anterior, setAnterior] = useState(atual);
+  const [flutuantes, setFlutuantes] = useState<{ id: number; delta: number }[]>([]);
+  if (atual !== anterior) {
+    setAnterior(atual);
+    setFlutuantes((l) => [...l.slice(-2), { id: ++seqFlutuante, delta: atual - anterior }]);
+  }
+  const ultimo = flutuantes[flutuantes.length - 1];
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex justify-between font-mono text-sm">
+      <div className="relative flex justify-between font-mono text-sm">
         <span>{rotulo}</span>
         <span>
           {alerta && <span className="mr-2 text-perigo">{alerta}</span>}
           {atual} / {max}
         </span>
+        {flutuantes.map((x) => (
+          <span
+            key={x.id}
+            className={`flutuante ${x.delta < 0 ? 'text-perigo' : 'text-ok'}`}
+            onAnimationEnd={() => setFlutuantes((l) => l.filter((y) => y.id !== x.id))}
+          >
+            {x.delta > 0 ? `+${x.delta}` : `−${-x.delta}`}
+          </span>
+        ))}
       </div>
-      <div className="h-2 bg-linha">
-        <div className={`h-full ${atual <= 0 ? 'bg-perigo' : cor}`} style={{ width: `${pct}%` }} />
+      <div key={ultimo?.id} className={`h-2 bg-linha ${ultimo ? (ultimo.delta < 0 ? 'flash-dano' : 'flash-cura') : ''}`}>
+        <div className={`barra-valor h-full ${atual <= 0 ? 'bg-perigo' : cor}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );

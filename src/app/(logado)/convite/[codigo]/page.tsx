@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { Carregando } from '@/componentes/efeitos/carregando';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { BotaoAceitar } from './botao-aceitar';
 
@@ -9,7 +10,7 @@ export const metadata: Metadata = { title: 'Convite · DESPERTAR' };
 export default function PaginaConvite({ params }: PageProps<'/convite/[codigo]'>) {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-16">
-      <Suspense fallback={<p className="text-apagado">Carregando convite…</p>}>
+      <Suspense fallback={<Carregando texto="Abrindo convite" />}>
         <Convite params={params} />
       </Suspense>
     </main>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { Carregando } from '@/componentes/efeitos/carregando';
 import { clienteServidor, usuarioAtual } from '@/lib/supabase/servidor';
 import { FormNovaMesa } from './form-nova-mesa';
 
@@ -10,7 +11,7 @@ export default function Mesas() {
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-10">
       <h1 className="text-3xl font-bold">Suas mesas</h1>
-      <Suspense fallback={<p className="text-apagado">Carregando…</p>}>
+      <Suspense fallback={<Carregando texto="Carregando suas mesas" />}>
         <ListaMesas />
       </Suspense>
       <section className="caixa flex flex-col gap-3 p-4">

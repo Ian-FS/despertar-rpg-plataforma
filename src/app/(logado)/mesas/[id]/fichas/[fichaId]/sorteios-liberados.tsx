@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from 'react';
 import { CartaoDespertar } from '@/componentes/cartoes';
+import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { DESP } from '@/regras/dados';
-import { escolherDespertarAcao, sortearAtributosAcao, sortearDespertarAcao } from '../acoes';
+import { escolherDespertarAcao, sortearAtributosAcao, sortearDespertarAcao, type Resultado } from '../acoes';
 
 /** Novo sorteio liberado pelo Mestre numa ficha já pronta (ou escolha pendente da Escolha Guiada). */
 export function SorteiosLiberados({
@@ -19,7 +20,14 @@ export function SorteiosLiberados({
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
-  const executar = (fn: () => Promise<{ erro?: string }>) => iniciar(async () => setErro((await fn()).erro ?? null));
+  const efeitos = useEfeitos();
+  const executar = (fn: () => Promise<Resultado>) =>
+    iniciar(async () => {
+      const r = await fn();
+      setErro(r.erro ?? null);
+      if (r.atributos) await efeitos.abrir({ tipo: 'atributos', dados: r.atributos });
+      if (r.despertar) await efeitos.abrir({ tipo: 'despertar', ...r.despertar });
+    });
 
   if (despertarPendente)
     return (

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { TIT } from '@/regras/dados';
 import type { Personagem } from '@/regras/personagem';
 import type { PropsAba } from './ficha-editor';
@@ -7,6 +8,7 @@ import type { PropsAba } from './ficha-editor';
 type CampoTexto = 'idade' | 'ocupacao' | 'motivo' | 'conceito' | 'notas';
 
 export function AbaNotas({ p, alterar, podeEditar }: PropsAba) {
+  const efeitos = useEfeitos();
   const texto = (campo: CampoTexto, rotulo: string, longo = false) => (
     <div className="flex flex-col gap-1">
       <label htmlFor={`n-${campo}`} className="text-sm font-semibold">
@@ -38,7 +40,14 @@ export function AbaNotas({ p, alterar, podeEditar }: PropsAba) {
               className="campo"
               value={p.titulo}
               disabled={!podeEditar}
-              onChange={(e) => alterar((r) => void (r.titulo = e.target.value))}
+              onChange={(e) => {
+                const id = e.target.value;
+                alterar((r) => void (r.titulo = id));
+                if (id && TIT[id]) {
+                  efeitos.som('raro');
+                  efeitos.aviso(`[ TÍTULO ] ${TIT[id].n} equipado: ${TIT[id].txt}`, 'ouro');
+                }
+              }}
             >
               <option value="">Nenhum</option>
               {p.titulosObtidos.map((id) => (
