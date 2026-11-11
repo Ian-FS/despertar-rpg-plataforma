@@ -447,7 +447,7 @@ function Pericias({ p, f, alterar, podeEditar }: PropsAba) {
 
 function AjustesMestre({ p, alterar }: PropsAba) {
   const numero = (rotulo: string, valor: number, set: (v: number) => void, id: string) => (
-    <label className="flex flex-col gap-1 text-sm" htmlFor={id}>
+    <label key={id} className="flex flex-col gap-1 text-sm" htmlFor={id}>
       {rotulo}
       <input id={id} type="number" className="campo" value={valor} onChange={(e) => set(Math.trunc(Number(e.target.value) || 0))} />
     </label>
