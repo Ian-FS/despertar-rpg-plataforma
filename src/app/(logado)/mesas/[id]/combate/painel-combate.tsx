@@ -20,13 +20,15 @@ import {
 interface Props {
   mesaId: string;
   estado: EstadoCombate;
+  /** relê o combate do banco (quando o servidor recusa por a tela estar atrasada) */
+  recarregar: () => void;
   grupo: FichaPublicoLinha[];
   souMestre: boolean;
   usuarioId: string;
 }
 
-/** Executa uma ação do combate e mostra o erro ou o que aconteceu. */
-function useAcaoCombate() {
+/** Executa uma ação do combate e mostra o erro ou o que aconteceu. Com erro, relê o combate. */
+function useAcaoCombate(recarregar?: () => void) {
   const efeitos = useEfeitos();
   const [ocupado, iniciar] = useTransition();
   const executar = (fn: () => Promise<ResultadoCombate>, sucesso?: () => void) =>
@@ -35,6 +37,7 @@ function useAcaoCombate() {
       if (r.erro) {
         efeitos.som('falha');
         efeitos.aviso(r.erro, 'perigo');
+        recarregar?.();
         return;
       }
       if (r.linhas?.length) efeitos.aviso(`[ COMBATE ] ${r.linhas.join(' ')}`, 'sys');
@@ -59,25 +62,25 @@ export function useAvisoDaVez(estado: EstadoCombate, usuarioId: string) {
   }, [chave, atual, usuarioId, efeitos, estado.vez]);
 }
 
-export function PainelCombate({ mesaId, estado, grupo, souMestre, usuarioId }: Props) {
+export function PainelCombate({ mesaId, estado, recarregar, grupo, souMestre, usuarioId }: Props) {
   useAvisoDaVez(estado, usuarioId);
   if (!estado.ativo) {
     return (
       <section className="caixa flex flex-col gap-3 p-4">
         <h2 className="rotulo">Combate</h2>
         {souMestre ? (
-          <NovoCombate mesaId={mesaId} grupo={grupo} />
+          <NovoCombate mesaId={mesaId} grupo={grupo} recarregar={recarregar} />
         ) : (
           <p className="text-sm text-apagado">Nenhum combate em andamento.</p>
         )}
       </section>
     );
   }
-  return <CombateAtivo mesaId={mesaId} estado={estado} grupo={grupo} souMestre={souMestre} usuarioId={usuarioId} />;
+  return <CombateAtivo mesaId={mesaId} estado={estado} recarregar={recarregar} grupo={grupo} souMestre={souMestre} usuarioId={usuarioId} />;
 }
 
-function CombateAtivo({ mesaId, estado, grupo, souMestre, usuarioId }: Props) {
-  const { ocupado, executar } = useAcaoCombate();
+function CombateAtivo({ mesaId, estado, recarregar, grupo, souMestre, usuarioId }: Props) {
+  const { ocupado, executar } = useAcaoCombate(recarregar);
   const [adicionando, setAdicionando] = useState(false);
   const atual = naVez(estado);
   const seq = sequencia(estado);
@@ -344,8 +347,8 @@ function LinhaInimigo({ v, onChange, onRemover }: { v: NovoInimigo; onChange: (v
   );
 }
 
-function NovoCombate({ mesaId, grupo }: { mesaId: string; grupo: FichaPublicoLinha[] }) {
-  const { ocupado, executar } = useAcaoCombate();
+function NovoCombate({ mesaId, grupo, recarregar }: { mesaId: string; grupo: FichaPublicoLinha[]; recarregar: () => void }) {
+  const { ocupado, executar } = useAcaoCombate(recarregar);
   const prontas = grupo.filter((g) => g.ativa && g.etapa === 'pronta' && g.tipo === 'jogador');
   const [escolhidas, setEscolhidas] = useState<Record<string, { on: boolean; surpreso: boolean }>>({});
   const [inimigos, setInimigos] = useState<NovoInimigo[]>([inimigoVazio()]);

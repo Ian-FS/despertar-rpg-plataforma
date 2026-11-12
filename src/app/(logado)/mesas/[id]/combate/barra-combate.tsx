@@ -22,7 +22,7 @@ export function BarraCombate({
   usuarioId: string;
   souMestre: boolean;
 }) {
-  const estado = useCombate(mesaId, inicial);
+  const { estado, recarregar } = useCombate(mesaId, inicial);
   useAvisoDaVez(estado, usuarioId);
   const efeitos = useEfeitos();
   const [ocupado, iniciar] = useTransition();
@@ -37,6 +37,7 @@ export function BarraCombate({
       if (r.erro) {
         efeitos.som('falha');
         efeitos.aviso(r.erro, 'perigo');
+        recarregar(); // a tela pode estar atrasada (ex.: o combate já acabou)
       } else if (r.linhas?.length) efeitos.aviso(`[ COMBATE ] ${r.linhas.join(' ')}`, 'sys');
     });
   return (

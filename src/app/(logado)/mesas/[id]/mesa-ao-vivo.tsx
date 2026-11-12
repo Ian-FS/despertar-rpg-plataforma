@@ -31,7 +31,7 @@ export function MesaAoVivo({
   /** nome de cada membro, por id */
   nomes: Record<string, string>;
 }) {
-  const estado = useCombate(mesaId, combate);
+  const { estado, recarregar } = useCombate(mesaId, combate);
   const grupo = useGrupo(mesaId, grupoInicial);
   const jogadores = grupo.filter((f) => f.tipo === 'jogador');
   const minhas = jogadores.filter((f) => f.dono_id === usuarioId);
@@ -39,7 +39,7 @@ export function MesaAoVivo({
 
   return (
     <>
-      <PainelCombate mesaId={mesaId} estado={estado} grupo={jogadores} souMestre={souMestre} usuarioId={usuarioId} />
+      <PainelCombate mesaId={mesaId} estado={estado} recarregar={recarregar} grupo={jogadores} souMestre={souMestre} usuarioId={usuarioId} />
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">

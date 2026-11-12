@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useEfeitos } from "@/componentes/efeitos/provedor";
 import { Rolador } from "@/componentes/rolador";
+import { clienteNavegador } from "@/lib/supabase/navegador";
 import { assinar } from "@/lib/supabase/tempo-real";
 import type { FichaLinha, RegrasMesa } from "@/lib/supabase/tipos-banco";
 import { HAB } from "@/regras/dados";
@@ -190,17 +191,30 @@ export function FichaEditor({
     }
   });
   useEffect(() => {
-    return assinar(`ficha:${fichaId}`, (c) =>
-      c.on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "fichas",
-          filter: `id=eq.${fichaId}`,
-        },
-        (payload) => recebida(payload.new as FichaLinha),
-      ),
+    // ao reconectar (aba em segundo plano, celular bloqueado) relê a ficha: o que se perdeu não é reenviado
+    const reler = () =>
+      clienteNavegador()
+        .from("fichas")
+        .select("*")
+        .eq("id", fichaId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) recebida(data);
+        });
+    return assinar(
+      `ficha:${fichaId}`,
+      (c) =>
+        c.on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "fichas",
+            filter: `id=eq.${fichaId}`,
+          },
+          (payload) => recebida(payload.new as FichaLinha),
+        ),
+      { sincronizar: reler },
     );
   }, [fichaId]);
 

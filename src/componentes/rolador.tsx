@@ -149,21 +149,22 @@ function RegistroMesa({
   });
 
   useEffect(() => {
-    const sb = clienteNavegador();
     let ativo = true;
-    sb.from('rolagens')
-      .select('*')
-      .eq('mesa_id', mesaId)
-      .order('criado_em', { ascending: false })
-      .limit(50)
-      .then(({ data }) => {
-        if (!ativo || !data) return;
-        // junta com o que já chegou ao vivo enquanto a lista carregava
-        setLinhas((atual) => {
-          const ids = new Set(atual.map((x) => x.id));
-          return [...atual, ...data.filter((x) => !ids.has(x.id))].slice(0, 50);
+    // relê as últimas rolagens ao conectar, ao reconectar e ao voltar para a aba (o Realtime não reenvia o que se perdeu)
+    const carregar = () =>
+      clienteNavegador()
+        .from('rolagens')
+        .select('*')
+        .eq('mesa_id', mesaId)
+        .order('criado_em', { ascending: false })
+        .limit(50)
+        .then(({ data }) => {
+          if (!ativo || !data) return;
+          setLinhas((atual) => {
+            const ids = new Set(data.map((x) => x.id));
+            return [...data, ...atual.filter((x) => !ids.has(x.id))].sort((x, y) => y.criado_em.localeCompare(x.criado_em)).slice(0, 50);
+          });
         });
-      });
     const sair = assinar(
       `rolagens:${mesaId}`,
       (c) =>
@@ -172,7 +173,7 @@ function RegistroMesa({
           { event: 'INSERT', schema: 'public', table: 'rolagens', filter: `mesa_id=eq.${mesaId}` },
           (payload) => chegou(payload.new as RolagemLinha),
         ),
-      setConectado,
+      { aoMudarStatus: setConectado, sincronizar: carregar },
     );
     return () => {
       ativo = false;
