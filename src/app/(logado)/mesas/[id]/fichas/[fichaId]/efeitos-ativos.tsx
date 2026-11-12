@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { BandejaDados } from '@/componentes/bandeja-dados';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { useMostrarRolagem } from '@/componentes/rolador';
 import { CONDICOES } from '@/regras/dados';
@@ -167,10 +168,11 @@ function NovoEfeito({
               <option value="dano">Dano</option>
               <option value="cura">Cura</option>
             </select>
-            <input className={`campo w-20 ${formulaOk ? '' : 'border-perigo'}`} value={formula} onChange={(e) => setFormula(e.target.value)} placeholder="2d4" />
+            <input className={`campo w-24 font-mono ${formulaOk ? '' : 'border-perigo'}`} value={formula} onChange={(e) => setFormula(e.target.value)} placeholder="2d4" aria-label="Fórmula por turno" />
           </span>
         </label>
       </div>
+      <BandejaDados valor={formula} onChange={setFormula} />
       <div className="flex gap-2">
         <button
           className="botao px-2 py-0.5 text-xs"

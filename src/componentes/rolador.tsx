@@ -3,13 +3,14 @@
    da mesa, que todos os membros veem ao vivo. Sem `mesa` (página de demonstração), rola no navegador. */
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useState, useTransition } from 'react';
 import { rolarDados } from '@/app/(logado)/mesas/[id]/fichas/acoes';
+import { BandejaDados } from '@/componentes/bandeja-dados';
 import { NumeroGirando } from '@/componentes/efeitos/numero-girando';
 import { useAnimar } from '@/componentes/efeitos/preferencias';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { clienteNavegador } from '@/lib/supabase/navegador';
 import { assinar } from '@/lib/supabase/tempo-real';
 import type { RolagemLinha } from '@/lib/supabase/tipos-banco';
-import { d20Natural, ehCritico, normalizarFormula, rolar, somarDado, somarFixo, type Rolagem } from '@/regras/rolagem';
+import { d20Natural, ehCritico, normalizarFormula, rolar, type Rolagem } from '@/regras/rolagem';
 
 interface Entrada {
   id: number;
@@ -239,8 +240,6 @@ function RegistroMesa({
   );
 }
 
-const FACES = [4, 6, 8, 10, 12, 20, 100];
-
 /** Bandeja de dados: clicar nos dados monta a fórmula (ou digite: 2d6+3). O Mestre pode rolar em segredo. */
 function CampoFormula({ secreta, setSecreta, souMestre }: { secreta: boolean; setSecreta: (v: boolean) => void; souMestre: boolean }) {
   const rolarFn = useRolar();
@@ -255,40 +254,7 @@ function CampoFormula({ secreta, setSecreta, souMestre }: { secreta: boolean; se
   };
   return (
     <form onSubmit={enviar} className="flex flex-col gap-2 border-t border-linha p-2">
-      <div className="flex flex-wrap gap-1" role="group" aria-label="Dados">
-        {FACES.map((n) => (
-          <button
-            key={n}
-            type="button"
-            className="min-w-10 flex-1 border border-linha bg-painel-2 px-1 py-1.5 font-mono text-xs hover:border-sys hover:text-sys"
-            onClick={() => setFormula((f) => somarDado(f, n))}
-            title={`Somar 1d${n}`}
-          >
-            d{n}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-1">
-        {[-1, 1].map((d) => (
-          <button
-            key={d}
-            type="button"
-            className="border border-linha bg-painel-2 px-2 py-1 font-mono text-xs hover:border-sys"
-            onClick={() => setFormula((f) => somarFixo(f, d))}
-            title={d > 0 ? 'Somar 1 ao modificador' : 'Tirar 1 do modificador'}
-          >
-            {d > 0 ? '+1' : '−1'}
-          </button>
-        ))}
-        <button
-          type="button"
-          className="ml-auto px-2 py-1 text-xs text-apagado hover:text-texto disabled:opacity-40"
-          onClick={() => setFormula('')}
-          disabled={!formula}
-        >
-          Limpar
-        </button>
-      </div>
+      <BandejaDados valor={formula} onChange={setFormula} />
       <div className="flex gap-2">
         <input
           className={`campo w-24 font-mono ${formula && !ok ? 'border-perigo' : ''}`}
