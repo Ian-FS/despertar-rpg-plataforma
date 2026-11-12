@@ -8,6 +8,7 @@ import { ativarEfeito, encerrarEfeito, NOME_EVENTO, resumoBonus, type Evento } f
 import { normalizarFormula } from '@/regras/rolagem';
 import { eventoFicha } from '../acoes';
 import type { PropsAba } from './ficha-editor';
+import { useSincronizar } from './ficha-editor';
 
 const duracao = (r: number | null) => (r === null ? 'até o fim do combate' : r === 1 ? 'até o próximo turno' : `${r} rodadas`);
 
@@ -16,8 +17,10 @@ export function EventosMestre({ fichaId, aplicarMudanca }: PropsAba) {
   const efeitos = useEfeitos();
   const mostrar = useMostrarRolagem();
   const [pendente, iniciar] = useTransition();
+  const sincronizar = useSincronizar();
   const disparar = (evento: Evento) =>
     iniciar(async () => {
+      if (!(await sincronizar())) return;
       const r = await eventoFicha(fichaId, evento);
       if (r.erro || !r.evento) {
         efeitos.som('falha');
@@ -46,9 +49,22 @@ export function EventosMestre({ fichaId, aplicarMudanca }: PropsAba) {
   );
 }
 
-/** Lista dos efeitos ativos; o Mestre encerra e cria efeitos (venenos, bênçãos, maldições). */
-export function EfeitosAtivos({ p, alterar, souMestre }: PropsAba) {
-  const [criando, setCriando] = useState(false);
+/** Condições que causam dano por turno: valor sugerido e duração (o Mestre ajusta). */
+export const CONDICOES_DANO: Record<string, { formula: string; rodadas: number | null }> = {
+  Envenenado: { formula: '1d6', rodadas: 3 },
+  Queimando: { formula: '1d6', rodadas: 2 },
+  Sangrando: { formula: '2', rodadas: null },
+};
+
+/** Lista dos efeitos ativos; o Mestre encerra e cria efeitos (venenos, bênçãos, maldições).
+    `criando`: null = fechado, '' = efeito em branco, nome de condição = já preenchido com ela. */
+export function EfeitosAtivos({
+  p,
+  alterar,
+  souMestre,
+  criando,
+  setCriando,
+}: PropsAba & { criando: string | null; setCriando: (c: string | null) => void }) {
   if (!p.efeitosAtivos.length && !souMestre) return null;
   return (
     <div className="flex flex-col gap-2">
@@ -81,16 +97,18 @@ export function EfeitosAtivos({ p, alterar, souMestre }: PropsAba) {
         })}
       </ul>
       {souMestre &&
-        (criando ? (
+        (criando !== null ? (
           <NovoEfeito
-            onCancelar={() => setCriando(false)}
+            key={criando}
+            condicaoInicial={criando}
+            onCancelar={() => setCriando(null)}
             onCriar={(e) => {
               alterar((r) => void ativarEfeito(r, 'mestre', e));
-              setCriando(false);
+              setCriando(null);
             }}
           />
         ) : (
-          <button className="self-start text-xs text-sys hover:underline" onClick={() => setCriando(true)}>
+          <button className="self-start text-xs text-sys hover:underline" onClick={() => setCriando('')}>
             + Novo efeito (veneno, queimadura, bênção…)
           </button>
         ))}
@@ -98,20 +116,32 @@ export function EfeitosAtivos({ p, alterar, souMestre }: PropsAba) {
   );
 }
 
-function NovoEfeito({ onCriar, onCancelar }: { onCriar: (e: Parameters<typeof ativarEfeito>[2]) => void; onCancelar: () => void }) {
-  const [nome, setNome] = useState('');
-  const [condicao, setCondicao] = useState('');
-  const [rodadas, setRodadas] = useState('3');
-  const [formula, setFormula] = useState('');
+function NovoEfeito({
+  condicaoInicial,
+  onCriar,
+  onCancelar,
+}: {
+  condicaoInicial: string;
+  onCriar: (e: Parameters<typeof ativarEfeito>[2]) => void;
+  onCancelar: () => void;
+}) {
+  const sugestao = CONDICOES_DANO[condicaoInicial];
+  const [nome, setNome] = useState(condicaoInicial);
+  const [condicao, setCondicao] = useState(condicaoInicial);
+  const [rodadas, setRodadas] = useState(sugestao ? (sugestao.rodadas === null ? '' : String(sugestao.rodadas)) : '3');
+  const [formula, setFormula] = useState(sugestao?.formula ?? '');
   const [tipo, setTipo] = useState<'dano' | 'cura'>('dano');
   const formulaOk = !formula || !!normalizarFormula(formula);
   const nomeFinal = nome.trim() || condicao;
   const escolherCondicao = (c: string) => {
     setCondicao(c);
-    if (!nome) setNome(c);
+    if (!nome || nome === condicao) setNome(c);
+    const sug = CONDICOES_DANO[c];
+    if (sug && !formula) setFormula(sug.formula);
   };
   return (
-    <div className="flex flex-col gap-2 border border-linha p-2 text-xs">
+    <div className="flex flex-col gap-2 border border-sys/60 p-2 text-xs">
+      {sugestao && <p className="text-ouro">{condicaoInicial}: quanto de dano por turno e por quantas rodadas? (vazio = até o fim do combate)</p>}
       <div className="flex flex-wrap gap-2">
         <label className="flex flex-col gap-1">
           Condição

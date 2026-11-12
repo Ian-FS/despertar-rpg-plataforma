@@ -5,10 +5,11 @@ import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { d20, sinal, useRolar } from '@/componentes/rolador';
 import { podeSubirNivel, xpParaSubir } from '@/regras/criacao';
 import { ATRIBUTOS, CONDICOES, DESP, PERICIAS, RARIDADE_DESPERTAR, TITULOS, TIT } from '@/regras/dados';
-import { phDisponiveis } from '@/regras/ficha';
+import { condicoesAtivas, phDisponiveis } from '@/regras/ficha';
 import { ATRIBUTO_IDS } from '@/regras/tipos';
 import { subirNivelAcao } from '../acoes';
-import { EfeitosAtivos, EventosMestre } from './efeitos-ativos';
+import { CONDICOES_DANO, EfeitosAtivos, EventosMestre } from './efeitos-ativos';
+import { encerrarEfeito } from '@/regras/gatilhos';
 import type { PropsAba } from './ficha-editor';
 
 export function AbaFicha(props: PropsAba) {
@@ -139,10 +140,19 @@ function VidaMana(props: PropsAba) {
       r[campo] = campo === 'pmAtual' ? Math.max(0, Math.min(max, v)) : Math.min(max, v);
     });
   };
-  const alternarCondicao = (c: string) =>
+  const [criandoEfeito, setCriandoEfeito] = useState<string | null>(null);
+  const alternarCondicao = (c: string) => {
+    // condições com dano por turno viram um efeito: o Mestre informa o dano e a duração
+    if (!condicoes.includes(c) && CONDICOES_DANO[c]) return setCriandoEfeito(c);
     alterar((r) => {
-      r.condicoes = (condicoes.includes(c) ? condicoes.filter((x) => x !== c) : [...condicoes, c]).join(', ');
+      if (condicoes.includes(c)) {
+        for (const e of r.efeitosAtivos.filter((x) => x.condicao === c)) encerrarEfeito(r, e.uid);
+        r.condicoes = condicoesAtivas(r)
+          .filter((x) => x !== c)
+          .join(', ');
+      } else r.condicoes = [...condicoes, c].join(', ');
     });
+  };
 
   return (
     <section className="caixa flex flex-col gap-4 p-4">
@@ -183,7 +193,7 @@ function VidaMana(props: PropsAba) {
           <p className="text-xs text-ouro">Já aplicado na ficha: {f.efeitosCondicoes.join(' · ')}</p>
         )}
       </div>
-      <EfeitosAtivos {...props} />
+      <EfeitosAtivos {...props} criando={criandoEfeito} setCriando={setCriandoEfeito} />
       {!souMestre && (
         <p className="text-xs text-apagado">
           PV, PM, condições, efeitos, turnos e descansos são controlados pelo Mestre. Você recupera com poções (Inventário) e gasta PM ao

@@ -11,6 +11,7 @@ import { textoAfixo } from '@/regras/loja';
 import { limiteAcessorio, tipoAcessorio } from '@/regras/validacao';
 import { usarConsumivel } from '../acoes';
 import type { PropsAba } from './ficha-editor';
+import { useSincronizar } from './ficha-editor';
 
 const LIMITE = 20;
 const CATEGORIAS: { id: CategoriaItem; nome: string }[] = [
@@ -77,6 +78,7 @@ function LinhaItem({ it, p, alterar, aplicarMudanca, podeEditar, souMestre, fich
   const [usando, iniciar] = useTransition();
   const [descartando, setDescartando] = useState(false);
 
+  const sincronizar = useSincronizar();
   /** o servidor rola, aplica em PV/PM e gasta uma unidade */
   const usar = () => {
     if (!podeEditar || !it.usoAlvo) {
@@ -84,6 +86,7 @@ function LinhaItem({ it, p, alterar, aplicarMudanca, podeEditar, souMestre, fich
       return;
     }
     iniciar(async () => {
+      if (!(await sincronizar())) return;
       const r = await usarConsumivel(fichaId, it.uid);
       if (r.erro) {
         efeitos.som('falha');

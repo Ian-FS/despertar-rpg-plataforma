@@ -29,6 +29,7 @@ import { limiteDespertar, limiteHabilidade, type Limite as LimiteUso } from '@/r
 import { d20Natural, ehCritico } from '@/regras/rolagem';
 import { usarDespertar, usarHabilidade, type ResultadoUso } from '../acoes';
 import type { PropsAba } from './ficha-editor';
+import { useSincronizar } from './ficha-editor';
 
 /** Aviso do Sistema ao evoluir: mostra o marco dos níveis 3 e 5. */
 function anunciarNivel(efeitos: ReturnType<typeof useEfeitos>, nome: string, nv: number, m3: string, m5: string) {
@@ -418,8 +419,10 @@ function BotaoUsar({
   const [semPM, setSemPM] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ titulo: string; res: ResultadoPoder } | null>(null);
   const restam = limite ? limite.max - limite.usados : null;
+  const sincronizar = useSincronizar();
   const usar = (comPV: boolean) =>
     iniciar(async () => {
+      if (!(await sincronizar())) return;
       const r = await executar(comPV);
       if (r.erro) {
         efeitos.som('falha');

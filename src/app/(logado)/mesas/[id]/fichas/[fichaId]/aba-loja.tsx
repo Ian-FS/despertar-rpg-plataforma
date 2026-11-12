@@ -21,6 +21,7 @@ import type { Item } from '@/regras/personagem';
 import type { AtributoId, Rank } from '@/regras/tipos';
 import { comprarNaLoja, venderNaLoja, type ResultadoUso } from '../acoes';
 import type { PropsAba } from './ficha-editor';
+import { useSincronizar } from './ficha-editor';
 
 const CATEGORIAS: { id: CategoriaLoja; nome: string }[] = [
   { id: 'consumivel', nome: 'Consumíveis' },
@@ -85,8 +86,10 @@ export function AbaLoja(props: PropsAba) {
 function useAcaoLoja(aplicarMudanca: PropsAba['aplicarMudanca']) {
   const efeitos = useEfeitos();
   const [pendente, iniciar] = useTransition();
+  const sincronizar = useSincronizar();
   const executar = (fn: () => Promise<ResultadoUso>) =>
     iniciar(async () => {
+      if (!(await sincronizar())) return;
       const r = await fn();
       if (r.erro) {
         efeitos.som('falha');
