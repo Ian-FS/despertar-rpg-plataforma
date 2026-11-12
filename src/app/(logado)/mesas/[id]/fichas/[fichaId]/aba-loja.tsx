@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
-import { ACESSORIOS, AFIXOS, ARMADURAS, ARMAS, RANKS } from '@/regras/dados';
+import { ACESSORIOS, ARMADURAS, ARMAS, RANKS } from '@/regras/dados';
 import { rankDoNivel } from '@/regras/ficha';
 import {
   afixosNecessarios,
@@ -12,7 +12,6 @@ import {
   precoPedido,
   precoVenda,
   ranksDaLoja,
-  textoAfixo,
   validarPedido,
   type CategoriaLoja,
   type Pedido,
@@ -108,7 +107,6 @@ function Comprar({ p, f, fichaId, aplicarMudanca }: PropsAba) {
   const [base, setBase] = useState(basesDe('consumivel')[0][0]);
   const [rank, setRank] = useState<Rank>('E');
   const [rar, setRar] = useState<Pedido['rar']>('Comum');
-  const [afixos, setAfixos] = useState<string[]>([]);
   const [qtd, setQtd] = useState(1);
   const { pendente, executar } = useAcaoLoja(aplicarMudanca);
 
@@ -116,11 +114,11 @@ function Comprar({ p, f, fichaId, aplicarMudanca }: PropsAba) {
     setCat(c);
     setBase(basesDe(c)[0][0]);
     setRar('Comum');
-    setAfixos([]);
     setQtd(1);
   };
   const nAfixos = afixosNecessarios(cat, rar);
-  const pedido: Pedido = { cat, base, rank, rar: cat === 'consumivel' ? 'Comum' : rar, afixos: afixos.slice(0, nAfixos), qtd: cat === 'consumivel' ? qtd : undefined };
+  // para conferir preço e Rank aqui; os afixos de verdade o servidor sorteia na compra
+  const pedido: Pedido = { cat, base, rank, rar: cat === 'consumivel' ? 'Comum' : rar, qtd: cat === 'consumivel' ? qtd : undefined };
   const erro = validarPedido(p, pedido);
   const req = requisito(cat, base, rank);
   const catAfx = categoriaAfixo(cat);
@@ -160,7 +158,7 @@ function Comprar({ p, f, fichaId, aplicarMudanca }: PropsAba) {
         </Campo>
         {cat !== 'consumivel' && (
           <Campo id="lj-rar" rotulo="Raridade">
-            <select id="lj-rar" className="campo" value={rar} onChange={(e) => (setRar(e.target.value as Pedido['rar']), setAfixos([]))}>
+            <select id="lj-rar" className="campo" value={rar} onChange={(e) => setRar(e.target.value as Pedido['rar'])}>
               <option>Comum</option>
               <option>Incomum</option>
             </select>
@@ -171,31 +169,12 @@ function Comprar({ p, f, fichaId, aplicarMudanca }: PropsAba) {
             <input id="lj-qtd" type="number" min={1} max={99} className="campo w-20" value={qtd} onChange={(e) => setQtd(Math.max(1, Math.min(99, Math.trunc(Number(e.target.value) || 1))))} />
           </Campo>
         )}
-        {catAfx &&
-          Array.from({ length: nAfixos }, (_, i) => (
-            <Campo key={i} id={`lj-afx-${i}`} rotulo={`Afixo ${i + 1} (X = ${X})`}>
-              <select
-                id={`lj-afx-${i}`}
-                className="campo"
-                value={afixos[i] ?? ''}
-                onChange={(e) => {
-                  const novo = [...afixos];
-                  novo[i] = e.target.value;
-                  setAfixos(novo);
-                }}
-              >
-                <option value="">Escolha…</option>
-                {AFIXOS[catAfx]
-                  .filter((a) => a.n === afixos[i] || !afixos.includes(a.n))
-                  .map((a) => (
-                    <option key={a.n} value={a.n}>
-                      {a.n} · {textoAfixo(a.desc, X)}
-                    </option>
-                  ))}
-              </select>
-            </Campo>
-          ))}
       </div>
+      {catAfx && nAfixos > 0 && (
+        <p className="text-sm text-ouro">
+          {nAfixos === 1 ? '1 afixo sorteado' : `${nAfixos} afixos sorteados`} na tabela de {catAfx === 'arma' ? 'armas' : catAfx === 'armadura' ? 'armaduras e escudos' : 'acessórios'} na hora da compra (X = {X}).
+        </p>
+      )}
       {consumivel && <p className="text-sm text-apagado">{consumivel.desc}</p>}
       {req && (
         <p className={`text-xs ${f.atr[req.atr] >= req.valor ? 'text-apagado' : 'text-perigo'}`}>

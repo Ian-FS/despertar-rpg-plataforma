@@ -38,7 +38,7 @@ import { computarFicha, possui } from '@/regras/ficha';
 import { HAB, USOS_HAB } from '@/regras/dados';
 import { pagarPM } from '@/regras/custo';
 import { custoUso, usosDoDespertar } from '@/regras/despertar-usos';
-import { aplicarCompra, aplicarVenda, precoPedido, validarPedido, type Pedido } from '@/regras/loja';
+import { aplicarCompra, aplicarVenda, precoPedido, sortearAfixos, validarPedido, type Pedido } from '@/regras/loja';
 import { novoPersonagem, type Personagem } from '@/regras/personagem';
 import {
   aoMudarPV,
@@ -514,7 +514,8 @@ export async function comprarNaLoja(fichaId: string, pedido: Pedido): Promise<Re
       base: String(pedido.base),
       rank: pedido.rank,
       rar: pedido.rar,
-      afixos: Array.isArray(pedido.afixos) ? pedido.afixos.map(String) : [],
+      // os afixos são sorteados aqui, no servidor (o pedido do navegador não escolhe)
+      afixos: sortearAfixos(pedido.cat, pedido.rar),
       qtd: pedido.cat === 'consumivel' ? Math.trunc(Number(pedido.qtd) || 1) : undefined,
     };
     const erro = validarPedido(p, pd);
@@ -522,7 +523,8 @@ export async function comprarNaLoja(fichaId: string, pedido: Pedido): Promise<Re
     const preco = precoPedido(pd);
     const it = aplicarCompra(p, pd);
     await gravarFicha(fichaId, p);
-    return { mudanca: mudancaDe(p), mensagem: `Comprado: ${pd.qtd && pd.qtd > 1 ? pd.qtd + '× ' : ''}${it.nome} por ${preco} Ouro.` };
+    const sorteados = it.afixos?.length ? ` Afixo${it.afixos.length > 1 ? 's' : ''} sorteado${it.afixos.length > 1 ? 's' : ''}: ${it.afixos.map((a) => `${a.n} (${a.desc})`).join(', ')}.` : '';
+    return { mudanca: mudancaDe(p), mensagem: `Comprado: ${pd.qtd && pd.qtd > 1 ? pd.qtd + '× ' : ''}${it.nome} por ${preco} Ouro.${sorteados}` };
   });
 }
 

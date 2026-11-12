@@ -80,6 +80,7 @@ O `data.js` foi reimportado pelo script (`node scripts/importar-data-js.mjs <dat
 - **Refino** sem teste nem falha (só cristais); Mestre das Runas gasta 1 cristal a menos. A plataforma já tratava o Refino como um número que o jogador ajusta; acessórios não recebem Refino.
 - **Poderes**: vários danos agora dizem "+ mod + metade do Nível" (Impacto Sísmico, Explosão de Chamas, Prisão de Gelo, Corrente de Raios, Tempestade Elemental, Cataclismo, Disparo Estelar, Explosão de Aura e os ataques dos Despertares). Cura e Onda Restauradora usam o maior entre INT e PRE. O Sopro do Coração de Dragão usa VIT; a Lâmina de sangue, INT. Corte Vácuo: alcance 12 m + 6 m por nível.
 - **Botão Usar**: os Despertares agora mostram todas as formas de uso do site, inclusive as Formas sem custo (Velocidade Divina, Tiro Inevitável, Mil Futuros) e as liberadas no nv3/nv5 (Parar projéteis, Nuvem tóxica, Trocar com clone…). As habilidades mostram os usos alternativos ("Primeiro da rodada: 0 PM", "Cura como Ação de Movimento: 6 PM", "Dois projéteis: 4 PM"…); quem controla o "primeiro da rodada" é o jogador e o Mestre.
+- **Loja**: os afixos do item (1 no Incomum; acessórios têm 1 a mais) são sorteados pelo servidor na compra, sem repetir, como no livro. Antes o jogador escolhia.
 - **Imortal Menor** (Forma do Sangue Fervente) passou a ser automático: ao cair a 0 PV, volta a 25%, 1× por dia.
 
 O `regras.md` do repositório é o texto do PDF antigo. O livro atualizado está no site; as regras acima já estão no código.

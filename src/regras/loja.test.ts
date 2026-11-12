@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DESP } from './dados';
 import { custoUso, USOS_DESPERTAR, usosDoDespertar } from './despertar-usos';
 import { computarFicha } from './ficha';
-import { aplicarCompra, aplicarVenda, montarItem, precoItem, precoPedido, textoAfixo, validarPedido, type Pedido } from './loja';
+import { aplicarCompra, aplicarVenda, montarItem, precoItem, precoPedido, sortearAfixos, textoAfixo, validarPedido, type Pedido } from './loja';
 import { itemBase, novoPersonagem } from './personagem';
 import { conflitosEquipamento } from './validacao';
 
@@ -21,7 +21,7 @@ describe('Loja do Sistema', () => {
     expect(validarPedido(p, espada)).toBeNull();
     expect(validarPedido(p, { ...espada, rank: 'D' })).toMatch(/até o seu Rank/);
     expect(validarPedido(p, { ...espada, rar: 'Raro' as never })).toMatch(/Comuns e Incomuns/);
-    expect(validarPedido(p, { ...espada, rar: 'Incomum' })).toMatch(/Escolha 1 afixo/);
+    expect(validarPedido(p, { ...espada, rar: 'Incomum', afixos: [] })).toMatch(/sorteados/);
     expect(validarPedido(p, { ...espada, rar: 'Incomum', afixos: ['Brutal'] })).toBeNull();
     // acessório Comum já vem com 1 afixo
     expect(validarPedido(p, { cat: 'acessorio', base: 'Anel', rank: 'E', rar: 'Comum', afixos: ['Forte'] })).toBeNull();
@@ -52,6 +52,15 @@ describe('Loja do Sistema', () => {
     expect(p.itens[1].qtd).toBe(3);
     expect(aplicarVenda(p, it.uid)).toBe(50);
     expect(p.ouro).toBe(900 - 30 + 50);
+  });
+
+  it('afixos sorteados na tabela do tipo, sem repetir (acessório tem 1 a mais)', () => {
+    expect(sortearAfixos('arma', 'Comum')).toEqual([]);
+    expect(sortearAfixos('arma', 'Incomum', () => 1)).toEqual(['Afiada']);
+    const dois = sortearAfixos('acessorio', 'Incomum', () => 1);
+    expect(dois).toHaveLength(2);
+    expect(new Set(dois).size).toBe(2);
+    expect(sortearAfixos('consumivel', 'Comum')).toEqual([]);
   });
 
   it('texto do afixo com X calculado', () => {

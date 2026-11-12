@@ -3,6 +3,7 @@
 import { ACESSORIOS, AFIXOS, ARMADURAS, ARMAS, CONSUMIVEIS, PRECO_BASE, RANKS, RARIDADES } from './dados';
 import { rankDoNivel } from './ficha';
 import { armaComum, armaduraComum, escudoComum, itemBase, type CategoriaItem, type Item, type Personagem } from './personagem';
+import { sortearCrypto, type Sorteio } from './rolagem';
 import { RANK_IDS, type Rank, type RaridadeItem, type TipoArmadura } from './tipos';
 
 export const LIMITE_INVENTARIO = 20;
@@ -51,6 +52,19 @@ export function textoAfixo(desc: string, X: number): string {
   return desc.replace(/(\d*)X(d\d+)?/g, (_, k: string, dado?: string) => `${(k ? Number(k) : 1) * X}${dado ?? ''}`);
 }
 
+/**
+ * Sorteia os afixos do item na tabela do tipo dele, sem repetir (revisão 2: o item Incomum da Loja
+ * vem com 1 afixo sorteado; acessórios têm 1 a mais).
+ */
+export function sortearAfixos(cat: CategoriaLoja, rar: RaridadeItem, sortear: Sorteio = sortearCrypto): string[] {
+  const c = categoriaAfixo(cat);
+  if (!c) return [];
+  const restantes = AFIXOS[c].map((a) => a.n);
+  const r: string[] = [];
+  for (let i = 0; i < afixosNecessarios(cat, rar) && restantes.length; i++) r.push(restantes.splice(sortear(restantes.length) - 1, 1)[0]);
+  return r;
+}
+
 export const ranksDaLoja = (p: Personagem): Rank[] => RANK_IDS.slice(0, RANK_IDS.indexOf(rankDoNivel(p.nivel)) + 1);
 
 export const precoPedido = (pd: Pedido) => precoItem({ cat: pd.cat, rank: pd.rank, rar: pd.rar }) * (pd.cat === 'consumivel' ? Math.max(1, pd.qtd ?? 1) : 1);
@@ -67,10 +81,13 @@ export function validarPedido(p: Personagem, pd: Pedido): string | null {
     (pd.cat === 'consumivel' && CONSUMIVEIS_LOJA.some((c) => c.n === pd.base));
   if (!okBase) return 'Item indisponível na Loja.';
   const cat = categoriaAfixo(pd.cat);
-  const afixos = pd.afixos ?? [];
-  if (afixos.length !== afixosNecessarios(pd.cat, pd.rar)) return `Escolha ${afixosNecessarios(pd.cat, pd.rar)} afixo(s).`;
-  if (new Set(afixos).size !== afixos.length) return 'Os afixos precisam ser diferentes.';
-  if (cat && afixos.some((n) => !AFIXOS[cat].some((a) => a.n === n))) return 'Afixo inválido para este item.';
+  // sem afixos no pedido = conferência da tela (o servidor sorteia e confere de novo na compra)
+  const afixos = pd.afixos;
+  if (afixos) {
+    if (afixos.length !== afixosNecessarios(pd.cat, pd.rar)) return 'Os afixos do item são sorteados na compra.';
+    if (new Set(afixos).size !== afixos.length) return 'Os afixos precisam ser diferentes.';
+    if (cat && afixos.some((n) => !AFIXOS[cat].some((a) => a.n === n))) return 'Afixo inválido para este item.';
+  }
   if (pd.cat === 'consumivel' && (!Number.isInteger(pd.qtd ?? 1) || (pd.qtd ?? 1) < 1 || (pd.qtd ?? 1) > 99)) return 'Quantidade inválida.';
   if (precoPedido(pd) > p.ouro) return `Ouro insuficiente: custa ${precoPedido(pd)} e você tem ${p.ouro}.`;
   const empilha = pd.cat === 'consumivel' && p.itens.some((i) => mesmoConsumivel(i, pd));
