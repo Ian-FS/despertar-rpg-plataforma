@@ -65,3 +65,21 @@ describe('mediaDado', () => {
     expect(mediaDado(undefined)).toBe(0);
   });
 });
+
+describe('bandeja de dados', () => {
+  it('monta a fórmula clicando nos dados e no modificador', async () => {
+    const { somarDado, somarFixo } = await import('./rolagem');
+    let f = somarDado('', 6);
+    expect(f).toBe('1d6');
+    f = somarDado(f, 6);
+    expect(f).toBe('2d6');
+    f = somarFixo(f, 1);
+    f = somarFixo(f, 1);
+    expect(f).toBe('2d6+2');
+    f = somarDado(f, 20);
+    expect(f).toBe('2d6+1d20+2');
+    expect(somarFixo('2d6+1', -1)).toBe('2d6');
+    expect(somarFixo('', -1)).toBe('-1');
+    expect(somarDado('1d8 + 3', 8)).toBe('2d8+3');
+  });
+});

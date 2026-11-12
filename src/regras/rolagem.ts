@@ -90,3 +90,46 @@ export function mediaDado(expr: string | undefined): number {
   const m = /^(\d*)d(\d+)/.exec(expr ?? '');
   return m ? (Number(m[1] || 1) * (Number(m[2]) + 1)) / 2 : 0;
 }
+
+/* ---------------- bandeja de dados (monta a fórmula clicando) ---------------- */
+
+interface Termos {
+  dados: { sinal: 1 | -1; qtd: number; faces: number }[];
+  fixo: number;
+}
+
+function termos(formula: string): Termos {
+  const limpa = normalizarFormula(formula) ?? '';
+  const t: Termos = { dados: [], fixo: 0 };
+  for (const termo of limpa.match(/[+-]?[^+-]+/g) ?? []) {
+    const sinal = termo[0] === '-' ? -1 : 1;
+    const corpo = termo.replace(/^[+-]/, '');
+    if (corpo.includes('d')) {
+      const [q, f] = corpo.split('d');
+      t.dados.push({ sinal, qtd: Number(q || 1), faces: Number(f) });
+    } else t.fixo += sinal * Number(corpo);
+  }
+  return t;
+}
+
+function montar(t: Termos): string {
+  const partes = t.dados.filter((d) => d.qtd > 0).map((d, i) => `${d.sinal < 0 ? '-' : i ? '+' : ''}${d.qtd}d${d.faces}`);
+  if (t.fixo) partes.push(t.fixo < 0 ? `${t.fixo}` : partes.length ? `+${t.fixo}` : `${t.fixo}`);
+  return partes.join('');
+}
+
+/** Soma um dado à fórmula: "" + d6 → "1d6"; "1d6+2" + d6 → "2d6+2"; "2d6" + d20 → "2d6+1d20". */
+export function somarDado(formula: string, faces: number): string {
+  const t = termos(formula);
+  const igual = t.dados.find((d) => d.faces === faces && d.sinal > 0);
+  if (igual) igual.qtd = Math.min(igual.qtd + 1, 99);
+  else t.dados.push({ sinal: 1, qtd: 1, faces });
+  return montar(t);
+}
+
+/** Ajusta o modificador fixo: "2d6" +1 → "2d6+1"; "2d6+1" −1 → "2d6". */
+export function somarFixo(formula: string, delta: number): string {
+  const t = termos(formula);
+  t.fixo += delta;
+  return montar(t);
+}
