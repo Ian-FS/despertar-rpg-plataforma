@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { Carregando } from '@/componentes/efeitos/carregando';
+import { Rolador } from '@/componentes/rolador';
 import { clienteServidor, usuarioAtual } from '@/lib/supabase/servidor';
 import type { EtapaFicha, RegrasMesa, ResumoFicha } from '@/lib/supabase/tipos-banco';
 import { REGRAS_PADRAO } from '@/lib/fichas/regras-padrao';
@@ -51,9 +52,11 @@ async function DetalheMesa({ params }: { params: Promise<{ id: string }> }) {
   const minhas = (fichas ?? []).filter((f) => f.dono_id === usuario.id);
   const doGrupo = (grupo ?? []).filter((f) => f.ativa && f.dono_id !== usuario.id);
   const regras: RegrasMesa = { ...REGRAS_PADRAO, ...(mesa.regras ?? {}) };
+  // rolagens feitas aqui saem no nome do seu personagem ativo (se houver)
+  const ativa = minhas.find((f) => f.ativa && f.tipo === 'jogador' && f.etapa === 'pronta');
 
   return (
-    <>
+    <Rolador mesa={{ mesaId: mesa.id, fichaId: ativa?.id ?? null, usuarioId: usuario.id, souMestre }}>
       <div className="flex flex-col gap-2">
         <span className={`rotulo ${souMestre ? 'text-ouro' : ''}`}>Você é {souMestre ? 'o Mestre' : 'Jogador'}</span>
         <h1 className="text-3xl font-bold break-words">{mesa.nome}</h1>
@@ -128,7 +131,7 @@ async function DetalheMesa({ params }: { params: Promise<{ id: string }> }) {
       </section>
 
       {!souMestre && <BotaoSair mesaId={mesa.id} />}
-    </>
+    </Rolador>
   );
 }
 

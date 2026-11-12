@@ -83,6 +83,8 @@ async function Conteudo({ params }: { params: Promise<{ id: string; fichaId: str
             // recria o editor quando o servidor muda a ficha (subir de nível, Avaliação, novo sorteio)
             key={ficha.atualizado_em}
             fichaId={ficha.id}
+            mesaId={id}
+            usuarioId={usuario.id}
             inicial={p}
             souMestre={souMestre}
             regras={regras}

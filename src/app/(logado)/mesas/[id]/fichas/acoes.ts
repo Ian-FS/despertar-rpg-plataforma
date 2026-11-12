@@ -9,6 +9,7 @@ import {
   contextoMesa,
   exigir,
   gravarFicha,
+  registrarRolagens,
   registrarSorteio,
   semLiberacao,
   sorteioPermitido,
@@ -346,6 +347,16 @@ function rolarPoder(p: Personagem, ef: EfeitoPoder | null, chaves: AtributoId[],
   return res;
 }
 
+/** Rolagens de um poder para o registro da mesa, com o nome do poder e a CD da Resistência. */
+function rolagensDoPoder(nome: string, poder?: ResultadoPoder) {
+  if (!poder) return [];
+  return poder.rolagens.map((x, i) => ({
+    rotulo: `${nome} · ${x.rotulo}${i === poder.rolagens.length - 1 && poder.resistencia ? ` · ${poder.resistencia}` : ''}`,
+    r: x.r,
+    margemCritico: x.critico,
+  }));
+}
+
 const mudancaDe = (p: Personagem): MudancaFicha => ({
   pvAtual: p.pvAtual,
   pmAtual: p.pmAtual,
@@ -374,6 +385,7 @@ export async function usarConsumivel(fichaId: string, itemUid: string): Promise<
     it.qtd = (it.qtd ?? 1) - 1;
     if (it.qtd <= 0) p.itens = p.itens.filter((i) => i.uid !== itemUid);
     await gravarFicha(fichaId, p);
+    await registrarRolagens(ctx, [{ rotulo: it.nome, r }]);
     return {
       mudanca: mudancaDe(p),
       rolagem: r,
@@ -424,6 +436,7 @@ export async function usarHabilidade(fichaId: string, habId: string, pagarComPV 
     const poder = rolarPoder(p, efeitoHabilidade(p, habId), chavesHabilidade(habId), `hab:${habId}`);
     const zerou = aoZerarPM(p);
     await gravarFicha(fichaId, p);
+    await registrarRolagens(ctx, rolagensDoPoder(h.n, poder));
     return { mudanca: mudancaDe(p), mensagem: [r.mensagem, zerou].filter(Boolean).join(' '), poder };
   });
 }
@@ -448,7 +461,33 @@ export async function usarDespertar(fichaId: string, usoId: string, rank: Rank =
     const poder = rolarPoder(p, efeitoDespertar(p, usoId), chavesDespertar(p.despertar.id), `desp:${p.despertar.id}.${usoId}`);
     const zerou = aoZerarPM(p);
     await gravarFicha(fichaId, p);
+    await registrarRolagens(ctx, rolagensDoPoder(uso.nome, poder));
     return { mudanca: mudancaDe(p), mensagem: [r.mensagem, zerou].filter(Boolean).join(' '), poder };
+  });
+}
+
+/* ---------------- rolagens livres (botões da ficha e campo de fórmula) ---------------- */
+
+export interface ResultadoRolagem extends Resultado {
+  rolagem?: Rolagem;
+}
+
+/** Rola no servidor e grava no registro da mesa. `fichaId` opcional (rolagem sem personagem, na mesa). */
+export async function rolarDados(
+  alvo: { mesaId: string; fichaId?: string | null },
+  rotulo: string,
+  formula: string,
+  opcoes: { margemCritico?: number; secreta?: boolean } = {},
+): Promise<ResultadoRolagem> {
+  return tentar(async () => {
+    const ctx = alvo.fichaId ? await contextoFicha(alvo.fichaId) : await contextoMesa(alvo.mesaId);
+    if (ctx.mesaId !== alvo.mesaId) return { erro: 'Ficha de outra mesa.' };
+    const r = String(formula).length <= 60 ? rolar(formula, sortearCrypto) : null;
+    if (!r) return { erro: `Fórmula inválida: ${String(formula).slice(0, 60)}` };
+    const margem = Math.min(20, Math.max(1, Math.trunc(Number(opcoes.margemCritico) || 20)));
+    const texto = String(rotulo ?? '').trim() || r.formula;
+    await registrarRolagens(ctx, [{ rotulo: texto, r, margemCritico: margem }], !!opcoes.secreta);
+    return { rolagem: r };
   });
 }
 
@@ -468,6 +507,7 @@ export async function eventoFicha(fichaId: string, evento: Evento): Promise<Resu
     const p = ctx.p;
     const res = aplicarEvento(p, evento);
     await gravarFicha(fichaId, p);
+    await registrarRolagens(ctx, res.rolagens.map((x) => ({ rotulo: `${NOME_EVENTO[evento]} · ${x.rotulo}`, r: x.r })));
     return { mudanca: mudancaDe(p), evento: res };
   });
 }

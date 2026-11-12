@@ -1,10 +1,14 @@
 'use client';
-/* Rolagens rápidas da ficha. Por enquanto locais (só você vê); na Fase 2 vão para o histórico da mesa. */
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+/* Rolagens. Dentro de uma mesa (com `mesa`), cada rolagem é feita no servidor e entra no registro
+   da mesa, que todos os membros veem ao vivo. Sem `mesa` (página de demonstração), rola no navegador. */
+import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useState, useTransition } from 'react';
+import { rolarDados } from '@/app/(logado)/mesas/[id]/fichas/acoes';
 import { NumeroGirando } from '@/componentes/efeitos/numero-girando';
 import { useAnimar } from '@/componentes/efeitos/preferencias';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
-import { d20Natural, ehCritico, rolar, type Rolagem } from '@/regras/rolagem';
+import { clienteNavegador } from '@/lib/supabase/navegador';
+import type { RolagemLinha } from '@/lib/supabase/tipos-banco';
+import { d20Natural, ehCritico, normalizarFormula, rolar, type Rolagem } from '@/regras/rolagem';
 
 interface Entrada {
   id: number;
@@ -13,14 +17,23 @@ interface Entrada {
   margemCritico: number;
 }
 
-type Rolar = (rotulo: string, formula: string, opcoes?: { margemCritico?: number }) => Rolagem | null;
+type Rolar = (rotulo: string, formula: string, opcoes?: { margemCritico?: number }) => void;
 type Mostrar = (rotulo: string, r: Rolagem, opcoes?: { margemCritico?: number }) => void;
 
-const Ctx = createContext<{ rolar: Rolar; mostrar: Mostrar }>({ rolar: () => null, mostrar: () => {} });
-/** Rola no navegador e mostra o resultado. */
+const Ctx = createContext<{ rolar: Rolar; mostrar: Mostrar }>({ rolar: () => {}, mostrar: () => {} });
+/** Rola (no servidor, dentro de uma mesa) e mostra o resultado. */
 export const useRolar = () => useContext(Ctx).rolar;
-/** Mostra uma rolagem feita no servidor (poções, sorteios). */
+/** Mostra uma rolagem já feita no servidor (poções, poderes, eventos). */
 export const useMostrarRolagem = () => useContext(Ctx).mostrar;
+
+/** Mesa onde as rolagens são registradas. */
+export interface MesaRolador {
+  mesaId: string;
+  /** personagem que rola (null = rolagem da pessoa, sem ficha) */
+  fichaId: string | null;
+  usuarioId: string;
+  souMestre: boolean;
+}
 
 let seq = 0;
 const GIRO = 520;
@@ -28,8 +41,9 @@ const GIRO = 520;
 /** maior total possível (para o número girar numa faixa plausível) */
 const maximo = (r: Rolagem) => r.partes.reduce((t, p) => t + (p.tipo === 'dado' ? p.sinal * p.qtd * p.faces : p.sinal * p.valor), 0);
 
-export function Rolador({ children }: { children: React.ReactNode }) {
+export function Rolador({ children, mesa }: { children: React.ReactNode; mesa?: MesaRolador }) {
   const [lista, setLista] = useState<Entrada[]>([]);
+  const [secreta, setSecreta] = useState(false);
   const efeitos = useEfeitos();
   const animar = useAnimar();
 
@@ -47,17 +61,27 @@ export function Rolador({ children }: { children: React.ReactNode }) {
 
   const rolarFn = useCallback<Rolar>(
     (rotulo, formula, opcoes) => {
-      const r = rolar(formula);
-      if (r) mostrar(rotulo, r, opcoes);
-      return r;
+      if (!mesa) {
+        const r = rolar(formula);
+        if (r) mostrar(rotulo, r, opcoes);
+        return;
+      }
+      rolarDados({ mesaId: mesa.mesaId, fichaId: mesa.fichaId }, rotulo, formula, { ...opcoes, secreta }).then((res) => {
+        if (res.rolagem) mostrar(secreta ? `${rotulo} (secreta)` : rotulo, res.rolagem, opcoes);
+        else {
+          efeitos.som('falha');
+          efeitos.aviso(res.erro ?? 'Não foi possível rolar.', 'perigo');
+        }
+      });
     },
-    [mostrar],
+    [mesa, secreta, mostrar, efeitos],
   );
   const valor = useMemo(() => ({ rolar: rolarFn, mostrar }), [rolarFn, mostrar]);
 
   return (
     <Ctx.Provider value={valor}>
       {children}
+      {mesa && <RegistroMesa mesa={mesa} secreta={secreta} setSecreta={setSecreta} mostrar={mostrar} />}
       <div
         aria-live="polite"
         className="pointer-events-none fixed right-0 bottom-0 z-40 flex w-full max-w-xs flex-col gap-2"
@@ -92,6 +116,160 @@ export function Rolador({ children }: { children: React.ReactNode }) {
         })}
       </div>
     </Ctx.Provider>
+  );
+}
+
+const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+/** Registro de rolagens da mesa, ao vivo. Rolagens dos outros também aparecem no canto da tela. */
+function RegistroMesa({
+  mesa,
+  secreta,
+  setSecreta,
+  mostrar,
+}: {
+  mesa: MesaRolador;
+  secreta: boolean;
+  setSecreta: (v: boolean) => void;
+  mostrar: Mostrar;
+}) {
+  const [linhas, setLinhas] = useState<RolagemLinha[]>([]);
+  const [aberto, setAberto] = useState(false);
+  const [naoVistas, setNaoVistas] = useState(0);
+  const [conectado, setConectado] = useState(false);
+  const { mesaId, usuarioId } = mesa;
+
+  const chegou = useEffectEvent((nova: RolagemLinha) => {
+    setLinhas((atual) => (atual.some((x) => x.id === nova.id) ? atual : [nova, ...atual].slice(0, 50)));
+    if (nova.autor_id === usuarioId) return; // a sua já apareceu quando você rolou
+    mostrar(`${nova.quem}: ${nova.rotulo}${nova.secreta ? ' (secreta)' : ''}`, nova.resultado, { margemCritico: nova.margem_critico });
+    if (!aberto) setNaoVistas((n) => n + 1);
+  });
+
+  useEffect(() => {
+    const sb = clienteNavegador();
+    let ativo = true;
+    sb.from('rolagens')
+      .select('*')
+      .eq('mesa_id', mesaId)
+      .order('criado_em', { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        if (!ativo || !data) return;
+        // junta com o que já chegou ao vivo enquanto a lista carregava
+        setLinhas((atual) => {
+          const ids = new Set(atual.map((x) => x.id));
+          return [...atual, ...data.filter((x) => !ids.has(x.id))].slice(0, 50);
+        });
+      });
+    const canal = sb
+      .channel(`rolagens:${mesaId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'rolagens', filter: `mesa_id=eq.${mesaId}` },
+        (payload) => chegou(payload.new as RolagemLinha),
+      )
+      .subscribe((status) => setConectado(status === 'SUBSCRIBED'));
+    return () => {
+      ativo = false;
+      sb.removeChannel(canal);
+    };
+  }, [mesaId]);
+
+  const abrir = () => {
+    setAberto((a) => !a);
+    setNaoVistas(0);
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={abrir}
+        aria-expanded={aberto}
+        className="fixed bottom-0 left-0 z-40 m-4 flex items-center gap-2 border border-sys bg-painel/95 px-3 py-2 font-mono text-xs text-sys backdrop-blur hover:bg-sys/10"
+        style={{ marginBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))' }}
+        title={conectado ? 'Rolagens da mesa, ao vivo' : 'Conectando ao registro da mesa…'}
+      >
+        <span className={`h-2 w-2 rounded-full ${conectado ? 'bg-ok' : 'bg-apagado'}`} aria-hidden />
+        REGISTRO
+        {naoVistas > 0 && !aberto && <span className="bg-sys px-1.5 text-fundo">{naoVistas}</span>}
+      </button>
+      {aberto && (
+        <aside
+          className="janela fixed bottom-0 left-0 z-40 m-4 flex max-h-[70vh] w-[calc(100%-32px)] max-w-sm flex-col"
+          style={{ marginBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
+          aria-label="Registro de rolagens da mesa"
+        >
+          <div className="flex items-center justify-between border-b border-linha px-3 py-2">
+            <span className="rotulo">Rolagens da mesa</span>
+            <button className="text-apagado hover:text-texto" onClick={() => setAberto(false)} aria-label="Fechar registro">
+              ✕
+            </button>
+          </div>
+          <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+            {!linhas.length && <li className="p-2 text-xs text-apagado">Nenhuma rolagem ainda.</li>}
+            {linhas.map((x) => {
+              const crit = ehCritico(x.resultado, x.margem_critico);
+              const nat = d20Natural(x.resultado);
+              return (
+                <li key={x.id} className="flex items-start gap-2 border border-linha bg-painel-2 px-2 py-1.5 text-xs">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-apagado">
+                      <b className={x.autor_id === usuarioId ? 'text-sys' : 'text-texto'}>{x.quem}</b> · {hora(x.criado_em)}
+                      {x.secreta && <span className="text-ouro"> · secreta</span>}
+                    </span>
+                    <span className="block break-words">{x.rotulo}</span>
+                    <span className="block font-mono text-apagado">{x.resultado.texto}</span>
+                  </span>
+                  <span className={`shrink-0 text-xl font-bold ${crit ? 'text-ouro' : nat === 1 ? 'text-perigo' : 'text-sys'}`}>
+                    {x.resultado.total}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <CampoFormula secreta={secreta} setSecreta={setSecreta} souMestre={mesa.souMestre} />
+        </aside>
+      )}
+    </>
+  );
+}
+
+/** Campo para rolar qualquer fórmula (2d6+3, 1d20+5…). O Mestre pode rolar em segredo. */
+function CampoFormula({ secreta, setSecreta, souMestre }: { secreta: boolean; setSecreta: (v: boolean) => void; souMestre: boolean }) {
+  const rolarFn = useRolar();
+  const [formula, setFormula] = useState('');
+  const [rotulo, setRotulo] = useState('');
+  const [, iniciar] = useTransition();
+  const ok = !!normalizarFormula(formula);
+  const enviar = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ok) return;
+    iniciar(() => rolarFn(rotulo.trim() || formula, formula));
+  };
+  return (
+    <form onSubmit={enviar} className="flex flex-col gap-2 border-t border-linha p-2">
+      <div className="flex gap-2">
+        <input
+          className={`campo w-24 font-mono ${formula && !ok ? 'border-perigo' : ''}`}
+          value={formula}
+          onChange={(e) => setFormula(e.target.value)}
+          placeholder="2d6+3"
+          aria-label="Fórmula"
+        />
+        <input className="campo min-w-0 flex-1" value={rotulo} onChange={(e) => setRotulo(e.target.value)} placeholder="Para quê? (opcional)" aria-label="Rótulo" />
+        <button className="botao px-3 py-1 text-sm" disabled={!ok}>
+          Rolar
+        </button>
+      </div>
+      {souMestre && (
+        <label className="flex items-center gap-2 text-xs text-apagado">
+          <input type="checkbox" checked={secreta} onChange={(e) => setSecreta(e.target.checked)} />
+          Rolagens secretas (só você vê). Vale para todos os botões de rolar enquanto estiver marcado.
+        </label>
+      )}
+    </form>
   );
 }
 

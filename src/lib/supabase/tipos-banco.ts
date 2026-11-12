@@ -1,6 +1,8 @@
 /* Tipos das tabelas do Supabase (espelham supabase/migrations/). Atualize junto com as migrations.
    Precisam ser `type` (não `interface`) para encaixar no formato que o supabase-js espera. */
 
+import type { Rolagem } from '@/regras/rolagem';
+
 export type PapelMesa = 'mestre' | 'jogador';
 
 export type Perfil = {
@@ -53,6 +55,8 @@ export type FichaLinha = {
   sorteios_liberados: string[];
   criado_em: string;
   atualizado_em: string;
+  /** quem fez a última alteração (para avisar quem está com a ficha aberta) */
+  alterado_por: string | null;
 };
 
 export type SorteioLinha = {
@@ -63,6 +67,19 @@ export type SorteioLinha = {
   tipo: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   resultado: any;
+  criado_em: string;
+};
+
+export type RolagemLinha = {
+  id: string;
+  mesa_id: string;
+  ficha_id: string | null;
+  autor_id: string;
+  quem: string;
+  rotulo: string;
+  resultado: Rolagem;
+  margem_critico: number;
+  secreta: boolean;
   criado_em: string;
 };
 
@@ -92,6 +109,12 @@ export type Database = {
         Row: FichaLinha;
         Insert: Partial<FichaLinha> & Pick<FichaLinha, 'mesa_id' | 'dono_id' | 'dados'>;
         Update: Partial<FichaLinha>;
+        Relationships: [];
+      };
+      rolagens: {
+        Row: RolagemLinha;
+        Insert: Omit<RolagemLinha, 'id' | 'criado_em'>;
+        Update: Partial<RolagemLinha>;
         Relationships: [];
       };
       sorteios: {

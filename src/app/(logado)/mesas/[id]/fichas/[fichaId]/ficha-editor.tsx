@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -11,18 +12,24 @@ import {
 } from "react";
 import { useEfeitos } from "@/componentes/efeitos/provedor";
 import { Rolador } from "@/componentes/rolador";
-import type { RegrasMesa } from "@/lib/supabase/tipos-banco";
+import { clienteNavegador } from "@/lib/supabase/navegador";
+import type { FichaLinha, RegrasMesa } from "@/lib/supabase/tipos-banco";
 import { HAB } from "@/regras/dados";
 import { computarFicha, type FichaCalculada } from "@/regras/ficha";
 import type { Personagem } from "@/regras/personagem";
 import { ATRIBUTO_IDS } from "@/regras/tipos";
-import { mudouProgressao, validarFicha } from "@/regras/validacao";
+import {
+  mudouProgressao,
+  normalizarPersonagem,
+  validarFicha,
+} from "@/regras/validacao";
 import { salvarFicha, type MudancaFicha } from "../acoes";
 import { AbaFicha } from "./aba-ficha";
 import { AbaHabilidades } from "./aba-habilidades";
 import { AbaInventario } from "./aba-inventario";
 import { AbaLoja } from "./aba-loja";
 import { AbaNotas } from "./aba-notas";
+import { descreverMudanca, mesclarRemota } from "@/regras/sincronia";
 
 export interface PropsAba {
   p: Personagem;
@@ -79,12 +86,16 @@ function pendenteDeSalvar(
 
 export function FichaEditor({
   fichaId,
+  mesaId,
+  usuarioId,
   inicial,
   souMestre,
   regras,
   podeEditar,
 }: {
   fichaId: string;
+  mesaId: string;
+  usuarioId: string;
   inicial: Personagem;
   souMestre: boolean;
   regras: RegrasMesa;
@@ -162,6 +173,43 @@ export function FichaEditor({
     };
   }, [p, salvo, fichaId, souMestre]);
 
+  // tempo real: quando a ficha muda no banco (o Mestre aplicou dano, o jogador gastou PM em outra tela),
+  // a tela se atualiza sem perder o que está sendo editado aqui
+  const recebida = useEffectEvent((linha: FichaLinha) => {
+    const remota = normalizarPersonagem(linha.dados);
+    const r = mesclarRemota(p, salvo, remota);
+    if (!r) return;
+    setSalvo(remota);
+    setP(r);
+    if (linha.alterado_por && linha.alterado_por !== usuarioId) {
+      const quem = souMestre ? "O jogador" : "O Mestre";
+      efeitos.som("sistema");
+      efeitos.aviso(
+        `[ SISTEMA ] ${quem} alterou a ficha. ${descreverMudanca(salvo, remota)}`,
+        "sys",
+      );
+    }
+  });
+  useEffect(() => {
+    const sb = clienteNavegador();
+    const canal = sb
+      .channel(`ficha:${fichaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "fichas",
+          filter: `id=eq.${fichaId}`,
+        },
+        (payload) => recebida(payload.new as FichaLinha),
+      )
+      .subscribe();
+    return () => {
+      sb.removeChannel(canal);
+    };
+  }, [fichaId]);
+
   function confirmar() {
     iniciarConfirmacao(async () => {
       const r = await salvarFicha(fichaId, p);
@@ -193,7 +241,7 @@ export function FichaEditor({
 
   return (
     <SincronizarCtx.Provider value={sincronizar}>
-      <Rolador>
+      <Rolador mesa={{ mesaId, fichaId, usuarioId, souMestre }}>
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div

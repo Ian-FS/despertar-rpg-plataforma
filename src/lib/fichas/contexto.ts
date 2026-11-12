@@ -3,6 +3,7 @@ import 'server-only';
 import { clienteAdmin } from '@/lib/supabase/admin';
 import { usuarioAtual } from '@/lib/supabase/servidor';
 import type { FichaLinha, RegrasMesa } from '@/lib/supabase/tipos-banco';
+import type { Rolagem } from '@/regras/rolagem';
 import { normalizarPersonagem, resumoFicha } from '@/regras/validacao';
 import type { Personagem } from '@/regras/personagem';
 
@@ -66,11 +67,18 @@ export async function contextoFicha(fichaId: string): Promise<ContextoFicha> {
   return { ...ctx, ficha, p: normalizarPersonagem(ficha.dados as Personagem), souDono };
 }
 
-/** Grava a ficha recalculando o resumo público. */
+/** Grava a ficha recalculando o resumo público. Anota quem alterou, para a outra tela avisar. */
 export async function gravarFicha(fichaId: string, p: Personagem, extra: Partial<FichaLinha> = {}) {
+  const usuario = await usuarioAtual();
   const { error } = await clienteAdmin()
     .from('fichas')
-    .update({ dados: p, resumo: resumoFicha(p), atualizado_em: new Date().toISOString(), ...extra })
+    .update({
+      dados: p,
+      resumo: resumoFicha(p),
+      atualizado_em: new Date().toISOString(),
+      alterado_por: usuario?.id ?? null,
+      ...extra,
+    })
     .eq('id', fichaId);
   if (error) throw new ErroFicha('Não foi possível salvar a ficha. Tente de novo.');
 }
@@ -98,3 +106,43 @@ export async function sorteioPermitido(ctx: ContextoFicha, tipo: string): Promis
 }
 
 export const semLiberacao = (ctx: ContextoFicha, tipo: string) => ctx.ficha.sorteios_liberados.filter((t) => t !== tipo);
+
+export interface ItemRolagem {
+  rotulo: string;
+  r: Rolagem;
+  margemCritico?: number;
+}
+
+/** Nome que aparece no registro: o personagem (e "Mestre" se for ele rolando por outra ficha) ou a pessoa. */
+async function nomeNoRegistro(ctx: ContextoMesa, ficha?: { dono_id: string; dados: unknown }): Promise<string> {
+  const nomeFicha = ficha ? String((ficha.dados as Partial<Personagem>)?.nome ?? '').trim() || 'Sem nome' : null;
+  if (nomeFicha && ficha!.dono_id === ctx.usuarioId) return nomeFicha;
+  const { data } = await clienteAdmin().from('perfis').select('nome').eq('id', ctx.usuarioId).maybeSingle();
+  const pessoa = ctx.souMestre ? 'Mestre' : data?.nome || 'Jogador';
+  return nomeFicha ? `${nomeFicha} · ${pessoa}` : pessoa;
+}
+
+/** Grava rolagens no registro da mesa (todos veem ao vivo). Uma falha aqui não desfaz a ação. */
+export async function registrarRolagens(
+  ctx: ContextoMesa & { ficha?: FichaLinha },
+  itens: ItemRolagem[],
+  secreta = false,
+) {
+  if (!itens.length) return;
+  const quem = await nomeNoRegistro(ctx, ctx.ficha);
+  const { error } = await clienteAdmin()
+    .from('rolagens')
+    .insert(
+      itens.map((x) => ({
+        mesa_id: ctx.mesaId,
+        ficha_id: ctx.ficha?.id ?? null,
+        autor_id: ctx.usuarioId,
+        quem,
+        rotulo: x.rotulo.slice(0, 120),
+        resultado: x.r,
+        margem_critico: x.margemCritico ?? 20,
+        secreta: secreta && ctx.souMestre,
+      })),
+    );
+  if (error) console.error('[rolagens] não foi possível registrar', error.message);
+}

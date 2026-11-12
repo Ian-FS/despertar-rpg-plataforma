@@ -21,7 +21,7 @@ Uma plataforma web, usada no PC e no celular, onde o grupo:
 | Dispositivos | PC e celular (layout responsivo desde o início) |
 | Login | Google |
 | Voz e vídeo | **Discord**. A plataforma envia as rolagens a um canal por webhook. Activity do Discord fica como extra futuro. |
-| Combate | **Conduzido pela plataforma**: o atacante rola, o alvo escolhe Defender ou Esquivar, a plataforma compara e aplica o dano. O Mestre pode corrigir qualquer número. |
+| Combate | **Conduzido pela plataforma, confirmado pelo Mestre**: o atacante rola, o alvo escolhe Defender ou Esquivar, a plataforma compara e calcula o dano; o dano entra na ficha do alvo quando o Mestre clica em **Aplicar**. O Mestre pode corrigir qualquer número. |
 | Visibilidade das fichas | Jogador vê a própria ficha completa; das outras, só nome, nível, PV, PM e condições. O Mestre vê e edita tudo. |
 | Fonte das regras | `js/data.js` e `js/app.js` do site do Maickon (<https://github.com/maickon/-SISTEMA-DESPERTAR>), com permissão. O `regras.md` serve para conferência. |
 
@@ -58,6 +58,8 @@ Supabase
 ```
 
 ### Princípios
+
+0. **A plataforma calcula e mostra; o Mestre decide** (combinado em 12/11/2026). Automático só o que mexe na própria ficha: contas, custos de PM, rolagens, CD, duração de efeitos, passivas e descansos. Entre personagens (dano no alvo, efeitos em aliados, área) a plataforma calcula e oferece um botão "aplicar em…" que o Mestre confirma; nada muda sozinho na ficha de outra pessoa. O Mestre sempre pode editar qualquer valor na mão. Regras novas só são automatizadas se fizerem falta jogando.
 
 1. **O motor de regras é TypeScript puro**, em `src/regras/`, sem React e sem banco. A ficha, o combate e o painel do Mestre usam as mesmas funções. Tudo coberto por testes, começando pelos exemplos do livro (Rafa, Jin contra o Orc).
 2. **O banco guarda as escolhas, não os resultados.** A ficha salva atributos sorteados, nível, habilidades, perícias e itens. PV máximo, Defender, CD e o resto são recalculados pelo motor. Assim uma correção numa regra vale para todas as fichas na hora.
@@ -140,13 +142,15 @@ Cada fase termina com algo que o grupo já usa. Trabalho em branches, uma por ta
 **Pronto quando:** o grupo cria os personagens na plataforma e joga uma sessão usando a ficha.
 
 ### Fase 2 — Mesa ao vivo
-- [ ] Rolagem no servidor, histórico em tempo real, rolagem secreta do Mestre
-- [ ] Bandeja de dados e campo de fórmula
+- [x] Rolagem no servidor, histórico em tempo real, rolagem secreta do Mestre
+- [x] Campo de fórmula no registro da mesa (bandeja de dados visual fica para depois, se fizer falta)
+- [x] Ficha atualiza sozinha nas outras telas, com aviso do que o Mestre mudou
 - [ ] Chat da mesa
 - [ ] Webhook do Discord (rolagens públicas vão para o canal)
 - [ ] Painel do grupo (PV, PM, condições de todos)
 - [ ] Rastreador de combate: iniciativa, passadas, Pressão, turnos, duração de condições
-- [ ] Ataque × Reação conduzido (Defender/Esquivar, crítico, área = metade, Defesa Passiva e Defesa Fixa de Lacaios)
+- [ ] Ataque × Reação conduzido (Defender/Esquivar, crítico, área = metade, Defesa Passiva e Defesa Fixa de Lacaios); o dano no alvo entra com a confirmação do Mestre
+- Sobras de regras (em [divergencias.md](divergencias.md): "1× por rodada", gatilhos de acerto e derrota, PV temporários, efeitos em aliados) só entram se fizerem falta em sessão; até lá o Mestre resolve na mão
 
 **Pronto quando:** uma sessão inteira, combate incluído, roda pela plataforma.
 
@@ -165,7 +169,7 @@ Cada fase termina com algo que o grupo já usa. Trabalho em branches, uma por ta
 - [ ] Tokens de jogadores e inimigos, ligados ao combate
 - [ ] Movimento em tempo real; cada jogador move o próprio token
 - [ ] Névoa de guerra controlada pelo Mestre
-- [ ] Régua de distância e alcance de deslocamento
+- [ ] Régua de distância e alcance de deslocamento (área: o mapa mostra o raio, o Mestre escolhe os alvos)
 
 **Pronto quando:** um combate tático acontece no mapa.
 
