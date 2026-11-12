@@ -38,6 +38,18 @@ import { HAB } from '@/regras/dados';
 import { custoUso, PAGA_PM_COM_PV, usosDoDespertar } from '@/regras/despertar-usos';
 import { aplicarCompra, aplicarVenda, precoPedido, validarPedido, type Pedido } from '@/regras/loja';
 import { novoPersonagem, type Personagem } from '@/regras/personagem';
+import {
+  aoZerarPM,
+  aplicarEvento,
+  ativarEfeito,
+  erroLimite,
+  limiteDespertar,
+  limiteHabilidade,
+  NOME_EVENTO,
+  registrarUso,
+  type Evento,
+  type ResultadoEvento,
+} from '@/regras/gatilhos';
 import { chavesDespertar, chavesHabilidade, efeitoDespertar, efeitoHabilidade, resolverPoder, type EfeitoPoder, type ResultadoPoder } from '@/regras/poderes';
 import { rolar, sortearCrypto, type Rolagem } from '@/regras/rolagem';
 import { ATRIBUTO_IDS, RANK_IDS, type AtributoId, type Rank } from '@/regras/tipos';
@@ -309,6 +321,8 @@ export interface MudancaFicha {
   itens: Personagem['itens'];
   condicoes: string;
   ouro: number;
+  efeitosAtivos: Personagem['efeitosAtivos'];
+  usos: Personagem['usos'];
 }
 
 export interface ResultadoUso extends Resultado {
@@ -320,14 +334,27 @@ export interface ResultadoUso extends Resultado {
 }
 
 /** Rola o poder e desconta o dano que o próprio usuário sofre (ex.: Sobrecarga). */
-function rolarPoder(p: Personagem, ef: EfeitoPoder | null, chaves: AtributoId[]): ResultadoPoder | undefined {
+function rolarPoder(p: Personagem, ef: EfeitoPoder | null, chaves: AtributoId[], origem: string): ResultadoPoder | undefined {
   if (!ef) return undefined;
   const res = resolverPoder(p, ef, chaves);
   if (res.danoProprio) p.pvAtual = (p.pvAtual ?? computarFicha(p).pvMax) - res.danoProprio;
+  if (ef.ativo) {
+    const { dobrarRD, ...efeito } = ef.ativo;
+    const bonus = dobrarRD ? { ...efeito.bonus, rd: computarFicha(p).rd } : efeito.bonus;
+    ativarEfeito(p, origem, { ...efeito, bonus });
+  }
   return res;
 }
 
-const mudancaDe = (p: Personagem): MudancaFicha => ({ pvAtual: p.pvAtual, pmAtual: p.pmAtual, itens: p.itens, condicoes: p.condicoes, ouro: p.ouro });
+const mudancaDe = (p: Personagem): MudancaFicha => ({
+  pvAtual: p.pvAtual,
+  pmAtual: p.pmAtual,
+  itens: p.itens,
+  condicoes: p.condicoes,
+  ouro: p.ouro,
+  efeitosAtivos: p.efeitosAtivos,
+  usos: p.usos,
+});
 
 export async function usarConsumivel(fichaId: string, itemUid: string): Promise<ResultadoUso> {
   return tentar(async () => {
@@ -388,11 +415,16 @@ export async function usarHabilidade(fichaId: string, habId: string, pagarComPV 
     const h = HAB[habId];
     if (!h || !possui(p, habId)) return { erro: 'Você não tem essa habilidade.' };
     if (h.tipo !== 'Ativa' || !h.pm) return { erro: 'Essa habilidade não gasta PM.' };
+    const lim = limiteHabilidade(habId, possui(p, habId)!.nv);
+    const esgotado = erroLimite(p, h.n, lim);
+    if (esgotado) return { erro: esgotado };
     const r = pagarPM(p, h.n, h.pm, pagarComPV);
     if (r.erro) return { erro: r.erro };
-    const poder = rolarPoder(p, efeitoHabilidade(p, habId), chavesHabilidade(habId));
+    if (lim) registrarUso(p, lim);
+    const poder = rolarPoder(p, efeitoHabilidade(p, habId), chavesHabilidade(habId), `hab:${habId}`);
+    const zerou = aoZerarPM(p);
     await gravarFicha(fichaId, p);
-    return { mudanca: mudancaDe(p), mensagem: r.mensagem, poder };
+    return { mudanca: mudancaDe(p), mensagem: [r.mensagem, zerou].filter(Boolean).join(' '), poder };
   });
 }
 
@@ -407,11 +439,36 @@ export async function usarDespertar(fichaId: string, usoId: string, rank: Rank =
     if (!RANK_IDS.includes(rank)) return { erro: 'Rank inválido.' };
     const custo = custoUso(p, uso, rank);
     const nome = uso.porRank ? `${uso.nome} (Rank ${rank})` : uso.nome;
+    const lim = limiteDespertar(p.despertar.id, uso);
+    const esgotado = erroLimite(p, uso.nome, lim);
+    if (esgotado) return { erro: esgotado };
     const r = pagarPM(p, nome, custo, pagarComPV);
     if (r.erro) return { erro: r.erro };
-    const poder = rolarPoder(p, efeitoDespertar(p, usoId), chavesDespertar(p.despertar.id));
+    if (lim) registrarUso(p, lim);
+    const poder = rolarPoder(p, efeitoDespertar(p, usoId), chavesDespertar(p.despertar.id), `desp:${p.despertar.id}.${usoId}`);
+    const zerou = aoZerarPM(p);
     await gravarFicha(fichaId, p);
-    return { mudanca: mudancaDe(p), mensagem: r.mensagem, poder };
+    return { mudanca: mudancaDe(p), mensagem: [r.mensagem, zerou].filter(Boolean).join(' '), poder };
+  });
+}
+
+/* ---------------- eventos (início do turno, fim do combate, descansos) ---------------- */
+
+export interface ResultadoEventoFicha extends Resultado {
+  mudanca?: MudancaFicha;
+  evento?: ResultadoEvento;
+}
+
+/** O Mestre dispara um evento na ficha: aplica passivas, efeitos por turno, durações e limites de uso. */
+export async function eventoFicha(fichaId: string, evento: Evento): Promise<ResultadoEventoFicha> {
+  return tentar(async () => {
+    const ctx = await contextoFicha(fichaId);
+    if (!ctx.souMestre) return { erro: 'Só o Mestre controla turnos, combate e descansos.' };
+    if (!(evento in NOME_EVENTO)) return { erro: 'Evento inválido.' };
+    const p = ctx.p;
+    const res = aplicarEvento(p, evento);
+    await gravarFicha(fichaId, p);
+    return { mudanca: mudancaDe(p), evento: res };
   });
 }
 

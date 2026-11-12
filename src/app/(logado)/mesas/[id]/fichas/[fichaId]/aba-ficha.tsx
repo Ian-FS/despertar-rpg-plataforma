@@ -8,6 +8,7 @@ import { ATRIBUTOS, CONDICOES, DESP, PERICIAS, RARIDADE_DESPERTAR, TITULOS, TIT 
 import { phDisponiveis } from '@/regras/ficha';
 import { ATRIBUTO_IDS } from '@/regras/tipos';
 import { subirNivelAcao } from '../acoes';
+import { EfeitosAtivos, EventosMestre } from './efeitos-ativos';
 import type { PropsAba } from './ficha-editor';
 
 export function AbaFicha(props: PropsAba) {
@@ -123,7 +124,8 @@ function Pendencias({ p, f }: PropsAba) {
 
 /* ---------------- PV, PM, condições, descanso ---------------- */
 
-function VidaMana({ p, f, alterar, souMestre }: PropsAba) {
+function VidaMana(props: PropsAba) {
+  const { p, f, alterar, souMestre } = props;
   const efeitos = useEfeitos();
   const pv = p.pvAtual ?? f.pvMax;
   const pm = p.pmAtual ?? f.pmMax;
@@ -137,23 +139,6 @@ function VidaMana({ p, f, alterar, souMestre }: PropsAba) {
       r[campo] = campo === 'pmAtual' ? Math.max(0, Math.min(max, v)) : Math.min(max, v);
     });
   };
-  const descansoCurto = () => {
-    efeitos.som('cura');
-    efeitos.aviso('[ SISTEMA ] Descanso curto: 1/4 dos PV e PM recuperados.', 'ok');
-    alterar((r) => {
-      r.pvAtual = Math.min(f.pvMax, pv + Math.floor(f.pvMax / 4));
-      r.pmAtual = Math.min(f.pmMax, pm + Math.floor(f.pmMax / 4));
-    });
-  };
-  const descansoLongo = () => {
-    efeitos.som('cura');
-    efeitos.aviso('[ SISTEMA ] Descanso longo: PV e PM restaurados.', 'ok');
-    alterar((r) => {
-      r.pvAtual = f.pvMax;
-      r.pmAtual = f.pmMax;
-      r.condicoes = condicoes.filter((c) => c !== 'Exausto').join(', ');
-    });
-  };
   const alternarCondicao = (c: string) =>
     alterar((r) => {
       r.condicoes = (condicoes.includes(c) ? condicoes.filter((x) => x !== c) : [...condicoes, c]).join(', ');
@@ -165,16 +150,7 @@ function VidaMana({ p, f, alterar, souMestre }: PropsAba) {
       {souMestre && <Ajustes onAjuste={(d) => ajustar('pvAtual', pv, d, f.pvMax)} />}
       <Barra rotulo="PM" atual={pm} max={f.pmMax} cor="bg-sys" alerta={null} />
       {souMestre && <Ajustes onAjuste={(d) => ajustar('pmAtual', pm, d, f.pmMax)} />}
-      {souMestre && (
-        <div className="flex flex-wrap gap-2">
-          <button className="botao botao-discreto text-sm" onClick={descansoCurto} title="1 hora, até 2 por dia: recupera 1/4 dos PV e PM">
-            Descanso curto
-          </button>
-          <button className="botao botao-discreto text-sm" onClick={descansoLongo} title="8 horas: recupera tudo e remove Exausto">
-            Descanso longo
-          </button>
-        </div>
-      )}
+      {souMestre && <EventosMestre {...props} />}
       <div className="flex flex-col gap-2">
         <span className="rotulo">Condições</span>
         <div className="flex flex-wrap gap-1.5">
@@ -207,9 +183,10 @@ function VidaMana({ p, f, alterar, souMestre }: PropsAba) {
           <p className="text-xs text-ouro">Já aplicado na ficha: {f.efeitosCondicoes.join(' · ')}</p>
         )}
       </div>
+      <EfeitosAtivos {...props} />
       {!souMestre && (
         <p className="text-xs text-apagado">
-          PV, PM, condições e descansos são controlados pelo Mestre. Você recupera com poções (Inventário) e gasta PM ao
+          PV, PM, condições, efeitos, turnos e descansos são controlados pelo Mestre. Você recupera com poções (Inventário) e gasta PM ao
           usar habilidades (Habilidades).
         </p>
       )}

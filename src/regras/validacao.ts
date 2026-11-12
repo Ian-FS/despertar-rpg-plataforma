@@ -4,7 +4,7 @@
    O jogador PODE: nome e textos; distribuir Pontos de Status, gastar PH e pontos de perícia
    (sem desfazer o que já confirmou); equipar e desequipar; descartar itens; escolher o Título
    entre os conquistados.
-   Só o MESTRE: PV, PM, condições, descansos, Ouro, criar ou modificar itens, nível, XP, PH extra.
+   Só o MESTRE: PV, PM, condições, efeitos ativos, descansos, Ouro, criar ou modificar itens, nível, XP, PH extra.
    Pelo SERVIDOR (ações próprias): usar consumíveis, gastar PM em habilidades, sorteios. */
 import { ARMAS, HAB } from './dados';
 import { checarRequisitos, computarFicha, phDisponiveis } from './ficha';
@@ -71,7 +71,7 @@ export function mesclarEdicaoJogador(antes: Personagem, edicao: unknown): Person
     habs: limparHabs(e.habs),
     despertar: { id: antes.despertar.id, nv: inteiro(despE.nv, 1, 5) },
     // protegidos (vêm de `antes`): pvAtual, pmAtual, condicoes, ouro, nivel, xp, phNiveis, phExtra,
-    // potencial, compPot, compDesp, rankOficial, atrBase, titulosObtidos, bonus
+    // potencial, compPot, compDesp, rankOficial, atrBase, titulosObtidos, bonus, efeitosAtivos, usos
   };
 }
 
@@ -185,5 +185,7 @@ export function normalizarPersonagem(p: Personagem): Personagem {
     ocupacao: p.ocupacao ?? '',
     atrBase: p.atrBase ?? { ...p.atr },
     titulosObtidos: p.titulosObtidos ?? (p.titulo ? [p.titulo] : []),
+    efeitosAtivos: p.efeitosAtivos ?? [],
+    usos: p.usos ?? {},
   };
 }

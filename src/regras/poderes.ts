@@ -10,6 +10,7 @@ import { margemCritico, type AtaqueCalculado, type FichaCalculada } from './fich
 import { computarFicha } from './ficha';
 import type { Personagem } from './personagem';
 import { ehCritico, rolar, sortearCrypto, type Rolagem, type Sorteio } from './rolagem';
+import { resumoBonus, type NovoEfeito } from './gatilhos';
 import type { AtributoId } from './tipos';
 
 export interface EfeitoPoder {
@@ -34,6 +35,8 @@ export interface EfeitoPoder {
   teste?: { rotulo: string; pericia?: string; atr?: AtributoId };
   /** dano que o próprio usuário sofre (não reduzível); o servidor desconta dos PV */
   proprio?: string;
+  /** efeito que fica ativo na ficha depois de usar (bônus e duração em rodadas; 1 minuto = 10 rodadas) */
+  ativo?: NovoEfeito & { dobrarRD?: boolean };
   nota?: string;
 }
 
@@ -66,7 +69,9 @@ export const PODERES_HAB: Record<string, Def> = {
     dano: { arma: true, mult: nv >= 4 ? 4 : 3, soma: [0, 0, 10, 20, 0, 20][nv] ?? 0 },
     nota: 'Errar ainda causa o dano normal a estruturas.',
   }),
+  vul3: (nv) => ({ ativo: { nome: 'Rastro Fantasma', rodadas: 1, bonus: { desl: 3 * nv }, nota: 'Sem Ataques de Oportunidade até o fim do turno.' } }),
   vul4: (nv) => ({ resistencia: { atr: 'VIT', falha: `Envenenado: ${nv}d6 no início de cada turno dele por 3 rodadas`, sucesso: 'anula' }, nota: 'Vale para o seu próximo acerto.' }),
+  vul5: (nv) => ({ ativo: { nome: 'Ocultar Presença', rodadas: 10 * nv, nota: 'Invisível para quem não detecta mana; termina ao atacar.' } }),
   vul8: (nv) => ({
     ataque: { tipo: 'arma' },
     dano: { arma: true },
@@ -77,11 +82,11 @@ export const PODERES_HAB: Record<string, Def> = {
   dis3: (nv) => ({ ataque: { tipo: 'dist' }, dano: { arma: true, dados: d(nv, 8) }, nota: 'Sem munição.' }),
   dis5: (nv) => ({ ataque: { tipo: 'dist' }, dano: { arma: true, dados: d(nv + 1, 6) }, nota: 'Um ataque contra todas as criaturas na área.' }),
   dis6: (nv) => ({ ataque: { tipo: 'dist' }, dano: { arma: true, dados: d(nv + 3, 8) }, nota: 'Contra cada alvo na linha; escudo e RD não se aplicam.' }),
-  dis7: (nv) => ({ nota: `Alvo marcado: +${1 + nv} no acerto e +${nv}d6 de dano nos seus ataques contra ele.` }),
+  dis7: (nv) => ({ ativo: { nome: 'Marca do Caçador', rodadas: null, nota: `Contra o alvo marcado: +${1 + nv} no acerto e +${nv}d6 de dano.` } }),
   dis8: (nv) => ({ ataque: { tipo: 'dist', bonus: 10 }, dano: { dados: d(12 + 2 * (nv - 1), 12) }, nota: nv >= 5 ? 'Sem rodada de carga.' : 'Dispare no turno seguinte (sem Reações enquanto carrega).' }),
   bas2: (nv) => ({ resistencia: { atr: 'PRE', falha: '−4 em ataques contra quem não for você' }, nota: nv >= 5 ? 'Todos os inimigos no alcance; 2 rodadas.' : nv >= 3 ? 'Até 3 inimigos.' : undefined }),
   bas3: (nv) => ({ nota: `+${2 * nv} na sua Reação de Defender.` }),
-  bas4: (nv) => ({ nota: `+${2 + nv} em Defender e +${2 + nv} de RD; deslocamento 0.` }),
+  bas4: (nv) => ({ ativo: { nome: 'Postura Inabalável', rodadas: 1, bonus: { def: 2 + nv, rd: 2 + nv }, nota: 'Deslocamento 0; não pode ser movido nem derrubado.' } }),
   bas7: (nv) => ({ nota: `Barreira com PV = 30 + 5 × Nível + ${20 * (nv - 1)}.` }),
   bas8: (nv) => ({ nota: `RD ${10 + 2 * (nv - 1)} para aliados no alcance por ${1 + nv} rodadas.` }),
   ele1: (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv, 10), mod: 'INT', meioNivel: true }, nota: 'Fogo: Queimando 1d4 · Gelo: −3 m · Raio: −1 em Reações (1 rodada).' }),
@@ -89,7 +94,7 @@ export const PODERES_HAB: Record<string, Def> = {
   ele4: (nv) => ({ resistencia: { atr: 'AGI', falha: `Imobilizado${nv >= 3 ? ' por 2 rodadas' : ''} e sofre o dano` }, dano: { dados: d(nv + 1, 6), rotulo: 'Dano (se falhar)' } }),
   ele5: (nv) => ({ ataque: { tipo: 'poder', vezes: nv + 2 }, dano: { dados: d(nv + 3, 8) }, nota: `Até ${nv + 2} alvos, cada um a até 9 m do anterior.` }),
   ele6: (nv) => ({ resistencia: { atr: 'AGI', falha: 'dano todo', sucesso: 'metade do dano' }, dano: { dados: d(nv + 4, 8), rotulo: 'Dano por turno na zona' } }),
-  ele7: (nv) => ({ nota: `Quem o acerta corpo a corpo sofre ${d(nv + 1, 10)}; poderes elementais custam metade.` }),
+  ele7: (nv) => ({ ativo: { nome: 'Encarnação Elemental', rodadas: 10, nota: `Imune ao seu elemento; quem o acerta corpo a corpo sofre ${d(nv + 1, 10)}; poderes elementais custam metade.` } }),
   ele8: (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(15 + 3 * (nv - 1), 10) }, nota: 'Um ataque contra todos na área; quem reagir com sucesso sofre metade.' }),
   res1: (nv) => ({ dano: { dados: d(nv + 1, 8), mod: 'INT', cura: true } }),
   res2: (nv) => ({ nota: `+${nv} em ataques e Reações.` }),
@@ -98,25 +103,41 @@ export const PODERES_HAB: Record<string, Def> = {
   res6: (nv) => ({ nota: `${15 + 10 * (nv - 1)} PV temporários antes do dano.` }),
   dom3: (nv) => ({ resistencia: { atr: 'PRE', falha: 'torna-se sua companheira leal' }, nota: nv >= 5 ? 'Chefe derrotado: Resistência com −5.' : undefined }),
   dom4: (nv) => ({ resistencia: { atr: 'FOR', cdBonus: nv - 1, falha: nv >= 3 ? 'Imobilizado e Agarrado por 2 rodadas' : 'Imobilizado' } }),
-  aur1: (nv) => ({ nota: `+${nv} em ataques e +${2 * nv} de dano corpo a corpo.` }),
+  aur1: (nv) => ({ ativo: { nome: 'Fortalecimento', rodadas: 10, bonus: { atk: nv, danoCaC: 2 * nv, desl: nv >= 3 ? 3 : 0 } } }),
   aur3: (nv) => ({ resistencia: { atr: 'PRE', cdBonus: nv - 1, falha: 'Amedrontado' }, nota: nv >= 5 ? 'Inimigos 5+ níveis abaixo falham automaticamente.' : undefined }),
   aur4: (nv) => ({ dano: { dados: d(nv + 1, 8), rotulo: 'Dano extra (próximo ataque ou poder)' }, proprio: nv >= 3 ? '1d4' : '1d6', nota: nv >= 5 ? 'Se o ataque for crítico, o Mestre devolve o dano que você sofreu.' : undefined }),
   aur6: (nv) => ({ resistencia: { atr: 'FOR', falha: 'dano todo e empurrado 6 m', sucesso: 'metade e não é empurrado' }, dano: { dados: d(nv + 5, 6) } }),
-  aur7: () => ({ nota: '+1 Ação Principal e +4 em ataques, Reações e dano. Ao terminar: Exausto.' }),
+  aur7: (nv) => ({
+    ativo: {
+      nome: 'Modo Limite',
+      rodadas: 2 + nv,
+      bonus: { atk: 4, dano: 4, def: 4, esq: 4 },
+      aoTerminar: nv >= 3 ? 'Lento' : 'Exausto',
+      nota: `+${nv >= 5 ? 2 : 1} Ação Principal por rodada.${nv >= 3 ? ' Ao terminar fica Lento só por 1 rodada (o Mestre remove).' : ''}`,
+    },
+  }),
+  sen7: (nv) => ({ ativo: { nome: 'Precisão Absoluta', rodadas: 1 + nv, nota: `Ataques${nv >= 3 ? ' e Reações' : ''} com 2d20, fica com o maior.${nv >= 5 ? ' 19 natural conta como 20.' : ''}` } }),
 };
 
 /** Poderes do Despertar, por "despertar.uso" (ids de despertar-usos.ts). */
 export const PODERES_DESP: Record<string, Def> = {
-  'd01.rd': () => ({ nota: 'RD dobrada até o fim da rodada.' }),
+  'd01.rd': (nv) => ({ ativo: { nome: 'RD dobrada', rodadas: nv >= 5 ? 10 : 1, dobrarRD: true } }),
   'd02.lamina': (nv) => ({ ataque: { tipo: 'cac' }, dano: { arma: true, dados: d(nv, 6) } }),
   'd05.projetil': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 8), mod: 'INT' } }),
   'd06.cura': (nv) => ({ dano: { dados: d(nv, 8), mod: 'PRE', cura: true } }),
   'd07.barreira': (nv) => ({ nota: `+${1 + nv} na Reação de Defender.` }),
-  'd09.furia': (nv) => ({ nota: `Fúria: +${1 + nv} de dano corpo a corpo, RD ${1 + nv}, −2 em Esquivar.` }),
+  'd09.furia': (nv) => ({
+    ativo: { nome: 'Fúria', rodadas: 10, bonus: { danoCaC: 1 + nv, rd: 1 + nv, esq: -2 }, nota: nv >= 3 ? 'Abaixo da metade dos PV, o bônus de dano dobra.' : undefined },
+  }),
   'd10.gelo': (nv) => ({ resistencia: { atr: 'VIT', falha: `Lento por 1 rodada e sofre o dano${nv >= 5 ? ' (falhar por 5+: Imobilizado)' : ''}` }, dano: { dados: d(nv + 1, 6), rotulo: 'Dano (se falhar)' } }),
   'd13.raio': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 10) }, nota: nv >= 5 ? 'Atingidos não podem usar Reação até o seu próximo turno.' : 'Linha de 18 m.' }),
   'd14.telecinese': (nv) => ({ resistencia: { atr: 'FOR', falha: 'é movido' }, dano: { dados: d(nv + 1, 6), rotulo: 'Dano se arremessar' } }),
-  'd15.fera': (nv) => ({ nota: `Garras 1d8, +${2 * nv} FOR e AGI, +3 m de deslocamento.` }),
+  'd15.fera': (nv) => ({
+    ativo: { nome: 'Forma bestial', rodadas: 10, bonus: { FOR: 2 * nv, AGI: 2 * nv, desl: 3, desarmado: '1d8' }, nota: nv >= 3 ? 'Regenera 3 PV por turno.' : undefined },
+  }),
+  'd21.crescer': (nv) => ({
+    ativo: { nome: 'Titã', rodadas: 10, bonus: { danoCaC: 4 + 2 * (nv - 1) }, nota: `Tamanho ${nv >= 5 ? 'Colossal' : nv >= 3 ? 'Enorme' : 'Grande'}; +${10 * nv} PV temporários (o Mestre controla).` },
+  }),
   'd17.medo': (nv) => ({ resistencia: { atr: 'PRE', cdBonus: nv - 1, falha: nv >= 5 ? 'Amedrontado e Lento' : 'Amedrontado por 1 rodada' } }),
   'd18.toxina': (nv) => ({ nota: `Próximo acerto: Envenenado, ${d(nv + 1, 4)} por 3 rodadas.` }),
   'd22.gravidade': (nv) => ({ resistencia: { atr: 'FOR', falha: 'Derrubado e Lento' }, dano: nv >= 5 ? { dados: '4d10' } : undefined }),
@@ -209,8 +230,12 @@ export interface PreviaPoder {
   resistencia?: string;
   teste?: string;
   proprio?: string;
+  /** efeito que fica ativo: "Fúria (10 rodadas): +2 dano corpo a corpo" */
+  ativo?: string;
   nota?: string;
 }
+
+const duracao = (r: number | null) => (r === null ? 'até o fim do combate' : r === 1 ? 'até o seu próximo turno' : `${r} rodadas`);
 
 export function previaPoder(p: Personagem, ef: EfeitoPoder, chaves: AtributoId[], f = computarFicha(p)): PreviaPoder {
   const chave = melhorChave(f, chaves);
@@ -229,6 +254,10 @@ export function previaPoder(p: Personagem, ef: EfeitoPoder, chaves: AtributoId[]
   }
   if (ef.teste) out.teste = `${ef.teste.rotulo} ${bonusTeste(f, ef.teste) >= 0 ? '+' : ''}${bonusTeste(f, ef.teste)}`;
   if (ef.proprio) out.proprio = `Você sofre ${ef.proprio} (não reduzível)`;
+  if (ef.ativo) {
+    const b = ef.ativo.dobrarRD ? `+${f.rd} RD` : resumoBonus(ef.ativo);
+    out.ativo = `${ef.ativo.nome} (${duracao(ef.ativo.rodadas)})${b ? `: ${b}` : ''}`;
+  }
   return out;
 }
 

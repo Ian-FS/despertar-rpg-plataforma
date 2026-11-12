@@ -54,6 +54,7 @@ export function bolsa(p: Personagem): Bonus {
       if (ef) somar(ef(it.X || 1));
     }
   }
+  for (const e of p.efeitosAtivos ?? []) if (e.bonus) somar(e.bonus);
   somar({ ...p.bonus });
   return b;
 }

@@ -1,7 +1,7 @@
 /* Modelo do personagem: só as ESCOLHAS do jogador. Valores derivados vêm de computarFicha().
    Portado de novoPers / itemBase / armaComum / armaduraComum (app.js). */
 import { ARMAS, ARMADURAS, RANKS } from './dados';
-import type { AtributoId, Rank, RaridadeItem, TipoArmadura } from './tipos';
+import type { AtributoId, Bonus, Rank, RaridadeItem, TipoArmadura } from './tipos';
 
 export type CategoriaItem = 'arma' | 'armadura' | 'escudo' | 'acessorio' | 'consumivel' | 'outro';
 
@@ -100,8 +100,30 @@ export interface Personagem {
   bonus: BonusManual;
   itens: Item[];
   condicoes: string;
+  /** efeitos temporários (poderes em uso, venenos, bênçãos); duram rodadas ou até o fim do combate */
+  efeitosAtivos: EfeitoAtivo[];
+  /** usos de poderes limitados, por "período:origem" (ex.: "combate:hab:lam8"); zerados no fim do combate / descanso longo */
+  usos: Record<string, number>;
   notas: string;
   criado: number;
+}
+
+export interface EfeitoAtivo {
+  uid: string;
+  nome: string;
+  /** de onde veio: "hab:aur1", "desp:d09.furia", "mestre" */
+  origem: string;
+  /** rodadas restantes (diminui no início do seu turno); null = até o fim do combate */
+  rodadas: number | null;
+  /** bônus somados na ficha enquanto o efeito durar */
+  bonus?: Bonus;
+  /** condição aplicada enquanto o efeito durar (ex.: Envenenado) */
+  condicao?: string;
+  /** rolado no início do seu turno: dano (ou cura) nos PV ou PM */
+  porTurno?: { formula: string; cura?: boolean; alvo?: 'pv' | 'pm' };
+  /** condição que entra quando o efeito acaba (Modo Limite → Exausto) */
+  aoTerminar?: string;
+  nota?: string;
 }
 
 const novoId = () => globalThis.crypto.randomUUID();
@@ -207,6 +229,8 @@ export function novoPersonagem(armaInicial = 'Espada'): Personagem {
     bonus: { pv: 0, pm: 0, def: 0, esq: 0, atk: 0, dano: 0, rd: 0, desl: 0, ini: 0 },
     itens: [arma, traje, pocao],
     condicoes: '',
+    efeitosAtivos: [],
+    usos: {},
     notas: '',
     criado: Date.now(),
   };

@@ -41,3 +41,23 @@ Ao usar uma habilidade ativa ou um poder do Despertar, o servidor rola ataque, d
 - **Poderes ofensivos do Despertar sem "Resistência"** no texto (Raio, Lâmina de vento, Lâmina de sangue, Sopro, Projétil de fogo) usam ataque de poder: 1d20 + Nível + mod do atributo-chave.
 - **Crítico**: todos os dados rolam duas vezes, inclusive os do poder; os modificadores não dobram.
 - Ataque e dano são rolados juntos; quem decide se acertou (Reação do alvo) é o Mestre. Danos por turno (veneno, regeneração, zona) aparecem como fórmula ou rolagem do 1º turno.
+
+## Gatilhos, efeitos ativos e limites de uso (decidido em 2026-11-12)
+
+Motor em `src/regras/gatilhos.ts`. Eventos disparados pelo Mestre na ficha (Início do turno, Fim do combate, Descanso curto, Descanso longo); na Fase 2 o rastreador de combate dispara "Início do turno" sozinho.
+
+Interpretações adotadas:
+- **Duração**: conta no início do turno de quem tem o efeito. "1 rodada" e "até seu próximo turno" acabam no seu próximo turno; "1 minuto" = 10 rodadas; "até o fim do turno" (Rastro Fantasma) também vai até o próximo turno.
+- **Fim do combate** encerra todos os efeitos ativos (inclusive "1 minuto") e libera os usos "por combate". **Descanso longo** também libera os usos "por dia".
+- **Usar de novo** um poder que já está ativo renova a duração, não acumula.
+- **Modo Limite nv3** ("só Lento por 1 rodada"): a ficha marca Lento ao terminar; o Mestre remove depois de 1 rodada.
+- **Fôlego de Combate nv5**: remove sozinho a primeira condição que encontrar entre Atordoado, Lento e Amedrontado.
+- **Descanso curto**: o 3º no mesmo dia é permitido, com aviso (o Mestre decide).
+
+Automático hoje: Circulação de Mana (PM por turno, metade no descanso curto no nv3, recuperação ao zerar no nv5), Fôlego de Combate, Sangue Fervente (PV por turno e metade no descanso curto), Corpo Imortal, Pele de Fera nv3; efeitos ativos de Fortalecimento, Modo Limite, Postura Inabalável, Rastro Fantasma, Ocultar Presença, Marca do Caçador, Encarnação Elemental, Precisão Absoluta, RD dobrada, Fúria, Forma bestial e Titã; limites "1× por combate/dia" de todas as habilidades e Formas com PM.
+
+Fica para a Fase 2 (precisa de rodadas, alvos ou resultado do ataque):
+- "1× por rodada" e "sem custo 1× por rodada" (Corte Rápido nv5, Contra-Ataque nv5, Guardião nv5, Égide nv5, Troca de Alma nv5, Passo Instantâneo, Precognição).
+- Gatilhos de acerto e derrota (Absorção, Marca do Caçador nv5, Legião nv5) e Imortal Menor (volta com 25% ao chegar a 0 PV).
+- PV temporários (Titã, Égide Sagrada) e efeitos lançados em aliados (Bênção de Vigor, Regeneração, Santuário, Ponto Fraco).
+- Formas Evoluídas sem custo de PM com "1×/combate" ou "1×/dia" (Velocidade Divina, Tiro Inevitável, Imortal Menor, Mil Futuros): ainda sem botão.

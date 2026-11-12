@@ -25,6 +25,7 @@ import {
   type PreviaPoder,
   type ResultadoPoder,
 } from '@/regras/poderes';
+import { limiteDespertar, limiteHabilidade, type Limite as LimiteUso } from '@/regras/gatilhos';
 import { d20Natural, ehCritico } from '@/regras/rolagem';
 import { usarDespertar, usarHabilidade, type ResultadoUso } from '../acoes';
 import type { PropsAba } from './ficha-editor';
@@ -121,6 +122,7 @@ function UsosDespertar({
           )}
           {podeEditar && u.liberado && (
             <BotaoUsar
+              limite={limiteDe(salvo, limiteDespertar(salvo.despertar.id, u))}
               pm={custoUso(salvo, u, rank)}
               executar={(comPV) => usarDespertar(fichaId, u.id, rank, comPV)}
               aplicarMudanca={aplicarMudanca}
@@ -163,6 +165,7 @@ function Minhas({ p, salvo, alterar, aplicarMudanca, podeEditar, souMestre, fich
                 <span className="font-mono text-sm">nv {x.nv}</span>
                 {podeEditar && h.tipo === 'Ativa' && h.pm > 0 && salvo.habs.some((y) => y.id === x.id) && (
                   <BotaoUsar
+                    limite={limiteDe(salvo, limiteHabilidade(x.id, salvo.habs.find((y) => y.id === x.id)!.nv))}
                     pm={h.pm}
                     executar={(comPV) => usarHabilidade(fichaId, x.id, comPV)}
                     aplicarMudanca={aplicarMudanca}
@@ -325,6 +328,13 @@ function Comprar({ h, p, ph, podeEditar, onComprar }: { h: Habilidade; p: PropsA
 }
 
 /** Botão "Usar": o servidor desconta o PM. Sem PM, oferece a Exaustão de Mana (ou a Hemomancia). */
+interface Limite {
+  texto: string;
+  max: number;
+  usados: number;
+}
+const limiteDe = (p: PropsAba['p'], l: LimiteUso | null): Limite | null => (l ? { texto: l.texto, max: l.max, usados: p.usos[l.chave] ?? 0 } : null);
+
 const previaHab = (p: PropsAba['p'], id: string) => {
   const ef = efeitoHabilidade(p, id);
   return ef ? previaPoder(p, ef, chavesHabilidade(id)) : undefined;
@@ -338,11 +348,12 @@ const previaDesp = (p: PropsAba['p'], usoId: string) => {
 function LinhaPrevia({ previa }: { previa?: PreviaPoder }) {
   if (!previa) return null;
   const partes = [previa.teste, previa.ataque, previa.dano, previa.proprio].filter(Boolean);
-  if (!partes.length && !previa.resistencia) return null;
+  if (!partes.length && !previa.resistencia && !previa.ativo) return null;
   return (
     <span className="block font-mono text-xs text-sys">
       {partes.join(' · ')}
       {previa.resistencia && <span className="block text-ouro">{previa.resistencia}</span>}
+      {previa.ativo && <span className="block text-ok">Ativa: {previa.ativo}</span>}
     </span>
   );
 }
@@ -392,7 +403,10 @@ function BotaoUsar({
   aplicarMudanca,
   hemomancia,
   rotulo,
+  limite,
 }: {
+  /** "1× por combate" etc. e quantos usos restam */
+  limite?: Limite | null;
   pm: number;
   executar: (comPV: boolean) => Promise<ResultadoUso>;
   aplicarMudanca: PropsAba['aplicarMudanca'];
@@ -403,6 +417,7 @@ function BotaoUsar({
   const [pendente, iniciar] = useTransition();
   const [semPM, setSemPM] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ titulo: string; res: ResultadoPoder } | null>(null);
+  const restam = limite ? limite.max - limite.usados : null;
   const usar = (comPV: boolean) =>
     iniciar(async () => {
       const r = await executar(comPV);
@@ -437,7 +452,12 @@ function BotaoUsar({
     );
   return (
     <>
-      <button className="botao px-2 py-0.5 text-xs" disabled={pendente} onClick={() => usar(false)} title="Desconta o PM e rola o poder">
+      {limite && (
+        <span className={`font-mono text-xs ${restam! > 0 ? 'text-apagado' : 'text-perigo'}`} title="Zera no fim do combate (ou no descanso longo, se for por dia)">
+          {limite.texto} · {restam! > 0 ? `resta ${restam}` : 'usado'}
+        </span>
+      )}
+      <button className="botao px-2 py-0.5 text-xs" disabled={pendente || restam === 0} onClick={() => usar(false)} title="Desconta o PM e rola o poder">
         {rotulo ?? 'Usar'} · {pm ? `${pm} PM` : 'sem custo'}
       </button>
       {resultado && <PainelPoder titulo={resultado.titulo} res={resultado.res} onFechar={() => setResultado(null)} />}
