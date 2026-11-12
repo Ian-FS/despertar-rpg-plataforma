@@ -7,7 +7,7 @@ import type { EstadoCombate } from '@/regras/combate';
 import { naVez, pressao } from '@/regras/combate';
 import { useCombate } from '../ao-vivo';
 import { proximaVezAcao } from './acoes';
-import { useAvisoDaVez } from './painel-combate';
+import { FilaTurnos, useAvisoDaVez } from './painel-combate';
 
 export function BarraCombate({
   mesaId,
@@ -60,6 +60,9 @@ export function BarraCombate({
       <Link href={`/mesas/${mesaId}`} className="text-xs text-sys hover:underline">
         Ver combate
       </Link>
+      <div className="w-full">
+        <FilaTurnos estado={estado} usuarioId={usuarioId} max={8} />
+      </div>
     </div>
   );
 }

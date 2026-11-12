@@ -84,7 +84,14 @@ function CombateAtivo({ mesaId, estado, grupo, souMestre, usuarioId }: Props) {
   const passadas = Math.max(1, ...seq.map((v) => v.passada));
   const minhaVez = !!atual && atual.donoId === usuarioId;
   const resumoDe = (c: Combatente) => grupo.find((g) => g.id === c.fichaId)?.resumo as Partial<ResumoFicha> | undefined;
-  const faltam = estado.vez ? seq.length - 1 - seq.findIndex((v) => v.uid === estado.vez!.uid && v.passada === estado.vez!.passada) : 0;
+  const idxAtual = estado.vez ? seq.findIndex((v) => v.uid === estado.vez!.uid && v.passada === estado.vez!.passada) : -1;
+  const faltam = idxAtual >= 0 ? seq.length - 1 - idxAtual : 0;
+  // a rodada inteira, ação por ação (quem tem 3 ações aparece 3 vezes); Surpreso fica no fim, sem agir
+  const porUid = new Map(estado.combatentes.map((c) => [c.uid, c]));
+  const slots = [
+    ...seq.map((v) => ({ c: porUid.get(v.uid)!, passada: v.passada })),
+    ...estado.combatentes.filter((c) => !seq.some((v) => v.uid === c.uid)).map((c) => ({ c, passada: 1 })),
+  ];
 
   return (
     <section className="janela flex flex-col gap-3 p-4" aria-label="Combate em andamento">
@@ -96,31 +103,47 @@ function CombateAtivo({ mesaId, estado, grupo, souMestre, usuarioId }: Props) {
         </span>
       </div>
 
+      <FilaTurnos estado={estado} usuarioId={usuarioId} />
+
       <ol className="flex flex-col gap-1.5">
-        {estado.combatentes.map((c) => {
-          const naVezAgora = estado.vez?.uid === c.uid;
+        {slots.map(({ c, passada }, i) => {
+          const naVezAgora = i === idxAtual;
+          const passou = idxAtual >= 0 && i < idxAtual;
           const meu = c.donoId === usuarioId;
+          const cor = c.tipo === 'inimigo' ? 'text-perigo' : meu ? 'text-sys' : '';
+          const borda = naVezAgora ? 'border-ouro bg-ouro/10' : 'border-linha bg-painel-2';
+          // ações seguintes da mesma pessoa: linha curta, para mostrar que ela age de novo
+          if (passada > 1)
+            return (
+              <li key={`${c.uid}:${passada}`} className={`flex items-center gap-3 border px-2 py-1 text-sm ${borda} ${passou ? 'opacity-45' : ''}`}>
+                <span className="w-8 shrink-0 text-center font-mono text-xs text-apagado">{i + 1}º</span>
+                <span className={`min-w-0 flex-1 truncate font-semibold ${cor}`}>
+                  {naVezAgora && '▶ '}
+                  {c.nome}
+                </span>
+                <span className="font-mono text-xs text-apagado">{passada}ª ação</span>
+              </li>
+            );
           const r = resumoDe(c);
           const podeReagir = souMestre || meu;
           const pen = pressao(c);
+          const fora = c.surpreso && estado.rodada === 1;
           return (
             <li
-              key={c.uid}
-              className={`flex flex-wrap items-center gap-x-3 gap-y-1 border px-2 py-1.5 text-sm ${
-                naVezAgora ? 'border-ouro bg-ouro/10' : 'border-linha bg-painel-2'
-              }`}
+              key={`${c.uid}:${passada}`}
+              className={`flex flex-wrap items-center gap-x-3 gap-y-1 border px-2 py-1.5 text-sm ${borda} ${passou || fora ? 'opacity-60' : ''}`}
             >
-              <span className="w-8 shrink-0 text-center font-mono text-lg font-bold text-sys" title="Iniciativa">
+              <span className="w-8 shrink-0 text-center font-mono text-lg font-bold text-sys" title={`Iniciativa ${c.iniciativa}`}>
                 {c.iniciativa}
               </span>
               <span className="min-w-0 flex-1">
-                <span className={`block truncate font-semibold ${c.tipo === 'inimigo' ? 'text-perigo' : meu ? 'text-sys' : ''}`}>
+                <span className={`block truncate font-semibold ${cor}`}>
                   {naVezAgora && '▶ '}
                   {c.nome}
-                  {c.surpreso && <span className="ml-2 text-xs font-normal text-ouro">Surpreso</span>}
+                  {fora && <span className="ml-2 text-xs font-normal text-ouro">Surpreso: não age nesta rodada</span>}
                 </span>
                 <span className="block font-mono text-xs text-apagado">
-                  {c.acoes} {c.acoes > 1 ? 'ações' : 'ação'}
+                  {c.acoes > 1 ? `${c.acoes} ações · 1ª ação` : '1 ação'}
                   {c.tipo === 'ficha' && r?.pvMax ? ` · PV ${r.pvAtual}/${r.pvMax} · PM ${r.pmAtual}/${r.pmMax}` : ''}
                   {c.tipo === 'ficha' && r?.condicoes ? ` · ${r.condicoes}` : ''}
                 </span>
@@ -199,6 +222,45 @@ function CombateAtivo({ mesaId, estado, grupo, souMestre, usuarioId }: Props) {
         O Início do turno (passivas, venenos, duração dos efeitos) é aplicado sozinho quando chega a vez de cada personagem, na 1ª passada.
       </p>
     </section>
+  );
+}
+
+/** Fila da rodada, estilo videogame: um quadradinho por ação, na ordem; quem tem 3 ações aparece 3 vezes. */
+export function FilaTurnos({ estado, usuarioId, max }: { estado: EstadoCombate; usuarioId: string; max?: number }) {
+  const seq = sequencia(estado);
+  const idx = estado.vez ? seq.findIndex((v) => v.uid === estado.vez!.uid && v.passada === estado.vez!.passada) : -1;
+  const porUid = new Map(estado.combatentes.map((c) => [c.uid, c]));
+  // na faixa curta (ficha) mostra só a vez atual e as próximas
+  const inicio = max ? Math.max(0, idx) : 0;
+  const visiveis = max ? seq.slice(inicio, inicio + max) : seq;
+  return (
+    <ol className="flex gap-1 overflow-x-auto pb-1" aria-label="Ordem das ações nesta rodada">
+      {visiveis.map((v, k) => {
+        const i = inicio + k;
+        const c = porUid.get(v.uid);
+        if (!c) return null;
+        const atual = i === idx;
+        const iniciais = c.nome
+          .split(/\s+/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((p) => (/^\d+$/.test(p) ? p : p[0].toUpperCase()))
+          .join('');
+        const cor = c.tipo === 'inimigo' ? 'border-perigo/70 text-perigo' : c.donoId === usuarioId ? 'border-sys text-sys' : 'border-linha text-texto';
+        return (
+          <li
+            key={`${v.uid}:${v.passada}`}
+            title={`${c.nome}${v.passada > 1 ? ` · ${v.passada}ª ação` : ''}`}
+            className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center border bg-painel-2 font-mono ${cor} ${
+              atual ? 'border-2 border-ouro bg-ouro/15 text-ouro' : i < idx ? 'opacity-35' : ''
+            }`}
+          >
+            <span className="text-sm leading-none font-bold">{iniciais}</span>
+            {v.passada > 1 && <span className="text-[10px] leading-none text-apagado">{v.passada}ª</span>}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
