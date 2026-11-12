@@ -7,6 +7,7 @@ import { NumeroGirando } from '@/componentes/efeitos/numero-girando';
 import { useAnimar } from '@/componentes/efeitos/preferencias';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
 import { clienteNavegador } from '@/lib/supabase/navegador';
+import { assinar } from '@/lib/supabase/tempo-real';
 import type { RolagemLinha } from '@/lib/supabase/tipos-banco';
 import { d20Natural, ehCritico, normalizarFormula, rolar, somarDado, somarFixo, type Rolagem } from '@/regras/rolagem';
 
@@ -162,17 +163,19 @@ function RegistroMesa({
           return [...atual, ...data.filter((x) => !ids.has(x.id))].slice(0, 50);
         });
       });
-    const canal = sb
-      .channel(`rolagens:${mesaId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'rolagens', filter: `mesa_id=eq.${mesaId}` },
-        (payload) => chegou(payload.new as RolagemLinha),
-      )
-      .subscribe((status) => setConectado(status === 'SUBSCRIBED'));
+    const sair = assinar(
+      `rolagens:${mesaId}`,
+      (c) =>
+        c.on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'rolagens', filter: `mesa_id=eq.${mesaId}` },
+          (payload) => chegou(payload.new as RolagemLinha),
+        ),
+      setConectado,
+    );
     return () => {
       ativo = false;
-      sb.removeChannel(canal);
+      sair();
     };
   }, [mesaId]);
 

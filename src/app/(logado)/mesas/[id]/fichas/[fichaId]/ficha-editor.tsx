@@ -12,7 +12,7 @@ import {
 } from "react";
 import { useEfeitos } from "@/componentes/efeitos/provedor";
 import { Rolador } from "@/componentes/rolador";
-import { clienteNavegador } from "@/lib/supabase/navegador";
+import { assinar } from "@/lib/supabase/tempo-real";
 import type { FichaLinha, RegrasMesa } from "@/lib/supabase/tipos-banco";
 import { HAB } from "@/regras/dados";
 import { computarFicha, type FichaCalculada } from "@/regras/ficha";
@@ -191,10 +191,8 @@ export function FichaEditor({
     }
   });
   useEffect(() => {
-    const sb = clienteNavegador();
-    const canal = sb
-      .channel(`ficha:${fichaId}`)
-      .on(
+    return assinar(`ficha:${fichaId}`, (c) =>
+      c.on(
         "postgres_changes",
         {
           event: "UPDATE",
@@ -203,11 +201,8 @@ export function FichaEditor({
           filter: `id=eq.${fichaId}`,
         },
         (payload) => recebida(payload.new as FichaLinha),
-      )
-      .subscribe();
-    return () => {
-      sb.removeChannel(canal);
-    };
+      ),
+    );
   }, [fichaId]);
 
   function confirmar() {
