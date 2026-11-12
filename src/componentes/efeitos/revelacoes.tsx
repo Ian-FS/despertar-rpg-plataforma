@@ -294,7 +294,7 @@ export function JanelaNivel({ dados, onFechar, som }: Base & { dados: DadosNivel
 
   const bencao = (r: { rolagens: number[] }) => (r.rolagens.length > 1 ? ` (1d6: 1 → ${r.rolagens[1]}, Bênção do Sistema)` : ` (1d6: ${r.rolagens[0]})`);
   const linhas = [
-    `Pontos de Status +${dados.status.valor}${bencao(dados.status)}`,
+    `Pontos de Status +${dados.status.valor}${dados.status.rolagens.length ? bencao(dados.status) : " (fixo)"}`,
     `Pontos de Habilidade +${dados.ph.valor}${bencao(dados.ph)}`,
     `PV máximos ${dados.pv[0]} → ${dados.pv[1]}`,
     `PM máximos ${dados.pm[0]} → ${dados.pm[1]}`,

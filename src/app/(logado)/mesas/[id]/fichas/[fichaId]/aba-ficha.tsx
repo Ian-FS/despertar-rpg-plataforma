@@ -9,7 +9,7 @@ import { condicoesAtivas, phDisponiveis } from '@/regras/ficha';
 import { ATRIBUTO_IDS } from '@/regras/tipos';
 import { subirNivelAcao } from '../acoes';
 import { CONDICOES_DANO, EfeitosAtivos, EventosMestre } from './efeitos-ativos';
-import { encerrarEfeito } from '@/regras/gatilhos';
+import { aoMudarPV, encerrarEfeito } from '@/regras/gatilhos';
 import type { PropsAba } from './ficha-editor';
 
 export function AbaFicha(props: PropsAba) {
@@ -133,12 +133,14 @@ function VidaMana(props: PropsAba) {
   const condicoes = p.condicoes ? p.condicoes.split(',').map((c) => c.trim()).filter(Boolean) : [];
   const ajustar = (campo: 'pvAtual' | 'pmAtual', atual: number, delta: number, max: number) => {
     efeitos.som(delta < 0 ? 'dano' : 'cura');
-    if (campo === 'pvAtual' && atual > 0 && atual + delta <= 0)
-      efeitos.aviso('[ AVISO ] PV a zero: você está Incapacitado.', 'perigo');
+    let avisos: string[] = [];
     alterar((r) => {
       const v = atual + delta;
       r[campo] = campo === 'pmAtual' ? Math.max(0, Math.min(max, v)) : Math.min(max, v);
+      // a 0 PV ou menos: No Limite (cai Derrubado, segue lutando com 1 Ação Principal)
+      if (campo === 'pvAtual') avisos = aoMudarPV(r, atual);
     });
+    if (avisos.length) efeitos.aviso(`[ AVISO ] ${avisos.join(' ')}`, 'perigo');
   };
   const [criandoEfeito, setCriandoEfeito] = useState<string | null>(null);
   const alternarCondicao = (c: string) => {
@@ -156,7 +158,7 @@ function VidaMana(props: PropsAba) {
 
   return (
     <section className="caixa flex flex-col gap-4 p-4">
-      <Barra rotulo="PV" atual={pv} max={f.pvMax} cor="bg-ok" alerta={pv <= 0 ? (pv <= -f.pvMax ? 'Morto' : 'Incapacitado') : null} />
+      <Barra rotulo="PV" atual={pv} max={f.pvMax} cor="bg-ok" alerta={pv <= 0 ? (f.pvMorte !== null && pv <= f.pvMorte ? 'Morto' : `No Limite · morte em ${f.pvMorte ?? '—'}`) : null} />
       {souMestre && <Ajustes onAjuste={(d) => ajustar('pvAtual', pv, d, f.pvMax)} />}
       <Barra rotulo="PM" atual={pm} max={f.pmMax} cor="bg-sys" alerta={null} />
       {souMestre && <Ajustes onAjuste={(d) => ajustar('pmAtual', pm, d, f.pmMax)} />}

@@ -184,7 +184,11 @@ export const CONDICOES: Descritivo[] = [
   },
   {
     "n": "Incapacitado",
-    "desc": "PV 0 ou menos. Pode falar e perceber, mas não pode agir, reagir nem se mover."
+    "desc": "Causado só por efeitos que digam isso (medo extremo, por exemplo). Pode falar e perceber, mas não pode agir, reagir nem se mover. Ataques contra você usam a Defesa Passiva."
+  },
+  {
+    "n": "No Limite",
+    "desc": "Seus PV estão em 0 ou menos. Ao entrar nesse estado você cai Derrubado, mas continua lutando, com só 1 Ação Principal por rodada (mais a Ação de Movimento). A cura conta a partir do valor negativo. Morre ao chegar a −PV máximos. Se o combate terminar e você continuar No Limite, desmaia até receber cura que o leve acima de 0 PV ou até um descanso longo (que o deixa com todos os PV)."
   },
   {
     "n": "Inconsciente",

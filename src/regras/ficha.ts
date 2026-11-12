@@ -48,12 +48,11 @@ export function bolsa(p: Personagem): Bonus {
   const efDesp = EFEITOS_DESP[p.despertar.id];
   if (efDesp) somar(efDesp(p.despertar.nv, ctx));
   if (p.titulo && TIT[p.titulo]) somar(TIT[p.titulo].ef);
-  for (const it of equipados(p)) {
-    for (const a of it.afixos) {
-      const ef = EFEITOS_AFIXO[a.n];
-      if (ef) somar(ef(it.X || 1));
-    }
-  }
+  // o mesmo afixo em dois itens equipados não se soma: vale o de maior valor
+  const maiorX = new Map<string, number>();
+  for (const it of equipados(p))
+    for (const a of it.afixos) if (EFEITOS_AFIXO[a.n]) maiorX.set(a.n, Math.max(maiorX.get(a.n) ?? 0, it.X || 1));
+  for (const [n, x] of maiorX) somar(EFEITOS_AFIXO[n](x));
   for (const e of p.efeitosAtivos ?? []) if (e.bonus) somar(e.bonus);
   somar({ ...p.bonus });
   return b;
@@ -141,6 +140,10 @@ export interface FichaCalculada {
   semReacao: boolean;
   /** não pode Esquivar (Imobilizado) */
   semEsquiva: boolean;
+  /** PV em 0 ou menos: continua lutando com 1 Ação Principal */
+  noLimite: boolean;
+  /** PV em que o personagem morre (−PV máximos; Corpo Imortal: −2×); null = só morte instantânea */
+  pvMorte: number | null;
 }
 
 export function computarFicha(p: Personagem): FichaCalculada {
@@ -171,8 +174,9 @@ export function computarFicha(p: Personagem): FichaCalculada {
   }
   if (escudo) {
     const { br } = brItem(escudo, p);
-    defEsc = 2 + br + Number(escudo.refino || 0);
-    rdArm += br;
+    // escudo: Refino dá RD, não Defender
+    defEsc = 2 + br;
+    rdArm += br + Number(escudo.refino || 0);
   }
 
   const res = {} as Record<AtributoId, number>;
@@ -254,6 +258,8 @@ export function computarFicha(p: Personagem): FichaCalculada {
     penAtaque: 0,
     semReacao: false,
     semEsquiva: false,
+    noLimite: false,
+    pvMorte: null,
   });
 }
 
@@ -330,6 +336,20 @@ function aplicarCondicoes(p: Personagem, f: FichaCalculada): FichaCalculada {
     if (!c.has(x)) continue;
     f.semReacao = true;
     efeitos.push(`${x}: não age nem reage`);
+  }
+
+  // No Limite (0 PV ou menos): continua lutando, mas com só 1 Ação Principal por rodada
+  const pv = p.pvAtual ?? f.pvMax;
+  const imortal = p.despertar.id === 'd30' ? p.despertar.nv : 0;
+  f.pvMorte = imortal >= 5 ? null : -f.pvMax * (imortal ? 2 : 1);
+  if (pv <= 0) {
+    f.noLimite = true;
+    const mantem =
+      (possui(p, 'bas6')?.nv ?? 0) >= 3 || // Fortaleza Viva nv3
+      imortal >= 3 || // Corpo Imortal nv3
+      (p.despertar.id === 'd09' && p.despertar.nv >= 5 && p.efeitosAtivos.some((e) => e.origem === 'desp:d09.furia')); // Fúria nv5
+    if (!mantem) f.acoes = 1;
+    efeitos.push(mantem ? 'No Limite: continua lutando (suas Ações Principais não diminuem)' : 'No Limite: só 1 Ação Principal por rodada');
   }
 
   f.condicoes = [...c];

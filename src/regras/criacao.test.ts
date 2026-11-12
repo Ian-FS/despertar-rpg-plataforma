@@ -108,13 +108,13 @@ describe('subir de nível', () => {
     expect(podeSubirNivel(p, {})).toBe(true);
   });
 
-  it('aplica Status, PH e consome a XP', () => {
+  it('aplica Status (sempre 2), PH (1d6) e consome a XP', () => {
     const p = novoPersonagem();
     p.xp = 12;
-    const r = sortearSubidaNivel(fixo(3, 6), p);
+    const r = sortearSubidaNivel(fixo(6), p);
     expect(r).toMatchObject({ novoNivel: 2, novoRank: null, avaliacao: [] });
     aplicarSubidaNivel(p, r, {});
-    expect([p.nivel, p.statusPend, p.phNiveis, p.xp]).toEqual([2, 3, 6, 2]);
+    expect([p.nivel, p.statusPend, p.phNiveis, p.xp]).toEqual([2, 2, 6, 2]);
   });
 
   it('no nível 5 libera o Rank D e sorteia a Avaliação dele', () => {

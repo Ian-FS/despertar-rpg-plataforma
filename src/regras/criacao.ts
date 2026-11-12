@@ -131,9 +131,13 @@ export function podeSubirNivel(p: Personagem, regras: { marcos?: boolean }): boo
   return regras.marcos ? true : p.xp >= xpParaSubir(p.nivel);
 }
 
+/** Pontos de Status ganhos a cada nível (fixo desde a revisão 2 das regras). */
+export const STATUS_POR_NIVEL = 2;
+
 export function sortearSubidaNivel(s: Sorteio, p: Personagem): SorteioNivel {
   const novoNivel = p.nivel + 1;
-  const status = d6ComBencao(s);
+  // revisão 2 das regras: Pontos de Status são sempre 2 por nível (só o PH é rolado)
+  const status = { rolagens: [], valor: STATUS_POR_NIVEL };
   const ph = d6ComBencao(s);
   const novoRank = rankDoNivel(novoNivel) !== rankDoNivel(p.nivel) ? rankDoNivel(novoNivel) : null;
   const avaliacao = novoRank ? sortearAvaliacao(s, novoRank, p).map((h) => h.id) : [];

@@ -9,7 +9,7 @@ import { ARV, DESP, HAB } from './dados';
 import { margemCritico, type AtaqueCalculado, type FichaCalculada } from './ficha';
 import { computarFicha } from './ficha';
 import type { Personagem } from './personagem';
-import { ehCritico, rolar, sortearCrypto, type Rolagem, type Sorteio } from './rolagem';
+import { d20Natural, ehCritico, rolar, sortearCrypto, type Rolagem, type Sorteio } from './rolagem';
 import { resumoBonus, type NovoEfeito } from './gatilhos';
 import type { AtributoId } from './tipos';
 
@@ -32,7 +32,7 @@ export interface EfeitoPoder {
   };
   resistencia?: { atr: AtributoId; cdBonus?: number; falha: string; sucesso?: string };
   /** teste do próprio usuário: perícia ou atributo (1d20 + Nível + mod) */
-  teste?: { rotulo: string; pericia?: string; atr?: AtributoId };
+  teste?: { rotulo: string; pericia?: string; atr?: AtributoId; bonus?: number };
   /** dano que o próprio usuário sofre (não reduzível); o servidor desconta dos PV */
   proprio?: string;
   /** efeito que fica ativo na ficha depois de usar (bônus e duração em rodadas; 1 minuto = 10 rodadas) */
@@ -57,13 +57,13 @@ export const PODERES_HAB: Record<string, Def> = {
     },
     nota: 'A Resistência só acontece se o ataque acertar.',
   }),
-  lam5: (nv) => ({ ataque: { tipo: 'arma' }, dano: { arma: true, dados: d(nv + 2, 6) }, nota: `Alcance ${18 + 6 * (nv - 1)} m.${nv >= 3 ? ' Atravessa: o mesmo ataque vale contra todos na linha.' : ''}${nv >= 5 ? ' Ignora RD.' : ''}` }),
+  lam5: (nv) => ({ ataque: { tipo: 'arma' }, dano: { arma: true, dados: d(nv + 2, 6) }, nota: `Alcance ${12 + 6 * (nv - 1)} m.${nv >= 3 ? ' Atravessa: o mesmo ataque vale contra todos na linha.' : ''}${nv >= 5 ? ' Ignora RD.' : ''}` }),
   lam6: (nv) => ({ ataque: { tipo: 'cac', vezes: nv + 2 }, dano: { arma: true, dados: nv >= 5 ? '2d6' : undefined }, nota: `Até ${nv + 2} alvos, um ataque contra cada.` }),
   lam8: (nv) => ({ ataque: { tipo: 'cac' }, dano: { dados: d(10 + 2 * (nv - 1), 10), mod: true, meioNivel: true }, nota: 'Um ataque contra todos na linha; quem reagir com sucesso sofre metade.' }),
   pun2: (nv) => ({ ataque: { tipo: 'desarmado' }, dano: { arma: true, dados: d(nv - 1, 6) } }),
   pun3: (nv) => ({ teste: { rotulo: 'Atletismo (oposto)', pericia: 'Atletismo' }, nota: `Se vencer: Agarrado, e sofre seu dano desarmado${nv > 1 ? ` +${nv - 1}d6` : ''} no início de cada turno seu.` }),
   pun5: (nv) => ({ ataque: { tipo: 'desarmado', vezes: nv + 3 }, dano: { arma: true } }),
-  pun6: (nv) => ({ dano: { dados: d(nv + 3, 8), mod: 'FOR' }, resistencia: { atr: 'FOR', falha: 'Derrubado e sofre o dano todo', sucesso: 'metade do dano' } }),
+  pun6: (nv) => ({ dano: { dados: d(nv + 3, 8), mod: 'FOR', meioNivel: true }, resistencia: { atr: 'FOR', falha: 'Derrubado e sofre o dano todo', sucesso: 'metade do dano' } }),
   pun8: (nv) => ({
     ataque: { tipo: 'desarmado' },
     dano: { arma: true, mult: nv >= 4 ? 4 : 3, soma: [0, 0, 10, 20, 0, 20][nv] ?? 0 },
@@ -83,30 +83,50 @@ export const PODERES_HAB: Record<string, Def> = {
   dis5: (nv) => ({ ataque: { tipo: 'dist' }, dano: { arma: true, dados: d(nv + 1, 6) }, nota: 'Um ataque contra todas as criaturas na área.' }),
   dis6: (nv) => ({ ataque: { tipo: 'dist' }, dano: { arma: true, dados: d(nv + 3, 8) }, nota: 'Contra cada alvo na linha; escudo e RD não se aplicam.' }),
   dis7: (nv) => ({ ativo: { nome: 'Marca do Caçador', rodadas: null, nota: `Contra o alvo marcado: +${1 + nv} no acerto e +${nv}d6 de dano.` } }),
-  dis8: (nv) => ({ ataque: { tipo: 'dist', bonus: 10 }, dano: { dados: d(12 + 2 * (nv - 1), 12) }, nota: nv >= 5 ? 'Sem rodada de carga.' : 'Dispare no turno seguinte (sem Reações enquanto carrega).' }),
+  dis8: (nv) => ({ ataque: { tipo: 'dist', bonus: 10 }, dano: { dados: d(12 + 2 * (nv - 1), 12), mod: true, meioNivel: true }, nota: nv >= 5 ? 'Sem rodada de carga.' : 'Dispare no turno seguinte (sem Reações enquanto carrega).' }),
   bas2: (nv) => ({ resistencia: { atr: 'PRE', falha: '−4 em ataques contra quem não for você' }, nota: nv >= 5 ? 'Todos os inimigos no alcance; 2 rodadas.' : nv >= 3 ? 'Até 3 inimigos.' : undefined }),
   bas3: (nv) => ({ nota: `+${2 * nv} na sua Reação de Defender.` }),
   bas4: (nv) => ({ ativo: { nome: 'Postura Inabalável', rodadas: 1, bonus: { def: 2 + nv, rd: 2 + nv }, nota: 'Deslocamento 0; não pode ser movido nem derrubado.' } }),
   bas7: (nv) => ({ nota: `Barreira com PV = 30 + 5 × Nível + ${20 * (nv - 1)}.` }),
   bas8: (nv) => ({ nota: `RD ${10 + 2 * (nv - 1)} para aliados no alcance por ${1 + nv} rodadas.` }),
+  // revisão 2: habilidades novas
+  lam9: (nv) => ({
+    ataque: { tipo: 'cac' },
+    dano: { arma: true, dados: nv > 1 ? d(nv - 1, 6) : undefined },
+    nota: `Resposta logo depois de vencer com Defender um ataque corpo a corpo.${nv >= 3 ? ' Se o Defender vencer por 5+, acerta sem rolar (não é crítico).' : ''}`,
+  }),
+  vul9: (nv) => ({
+    ataque: { tipo: 'arma', vezes: nv >= 5 ? 3 : 2, bonus: nv >= 3 ? 0 : -2 },
+    dano: { arma: true, dados: nv > 1 ? d(nv - 1, 4) : undefined },
+    nota: `Alcance ${9 + 3 * (nv - 1)} m; mesmo alvo ou alvos diferentes. A arma volta à mão no fim do turno.`,
+  }),
+  aur9: (nv) => ({
+    resistencia: { atr: 'FOR', falha: 'Esmagar: sofre o dano e fica Agarrado até o fim do próximo turno dele · Arrastar: movido e Derrubado', sucesso: 'metade do dano e não fica Agarrado' },
+    dano: { dados: d(nv + 3, 8), mod: 'PRE', meioNivel: true, rotulo: 'Dano (Esmagar)' },
+    nota: `Arrastar: até ${9 + 3 * (nv - 1)} m.${nv >= 5 ? ' Até 3 criaturas no mesmo uso.' : ''}`,
+  }),
+  sen9: (nv) => ({
+    teste: { rotulo: 'Sentir Mana (Dissipar)', pericia: 'Sentir Mana', bonus: 2 * (nv - 1) },
+    nota: `Contra 10 + Nível de quem criou o efeito.${nv >= 3 ? ' Ou Silenciar: Resistência (PRE) contra sua CD (PER ou INT).' : ''}`,
+  }),
   ele1: (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv, 10), mod: 'INT', meioNivel: true }, nota: 'Fogo: Queimando 1d4 · Gelo: −3 m · Raio: −1 em Reações (1 rodada).' }),
-  ele3: (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 2, 6), mod: 'INT' }, nota: 'Um ataque contra cada criatura na área; atingidos ficam Queimando (1d6 por 2 rodadas).' }),
-  ele4: (nv) => ({ resistencia: { atr: 'AGI', falha: `Imobilizado${nv >= 3 ? ' por 2 rodadas' : ''} e sofre o dano` }, dano: { dados: d(nv + 1, 6), rotulo: 'Dano (se falhar)' } }),
-  ele5: (nv) => ({ ataque: { tipo: 'poder', vezes: nv + 2 }, dano: { dados: d(nv + 3, 8) }, nota: `Até ${nv + 2} alvos, cada um a até 9 m do anterior.` }),
-  ele6: (nv) => ({ resistencia: { atr: 'AGI', falha: 'dano todo', sucesso: 'metade do dano' }, dano: { dados: d(nv + 4, 8), rotulo: 'Dano por turno na zona' } }),
+  ele3: (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 2, 6), mod: 'INT', meioNivel: true }, nota: 'Um ataque contra cada criatura na área; atingidos ficam Queimando (1d6 por 2 rodadas).' }),
+  ele4: (nv) => ({ resistencia: { atr: 'AGI', falha: `Imobilizado${nv >= 3 ? ' por 2 rodadas' : ''} e sofre o dano`, sucesso: 'metade do dano' }, dano: { dados: d(nv + 1, 6), mod: 'INT', meioNivel: true, rotulo: 'Dano (falha; sucesso: metade)' } }),
+  ele5: (nv) => ({ ataque: { tipo: 'poder', vezes: nv + 2 }, dano: { dados: d(nv + 3, 8), mod: 'INT', meioNivel: true }, nota: `Até ${nv + 2} alvos, cada um a até 9 m do anterior.` }),
+  ele6: (nv) => ({ resistencia: { atr: 'AGI', falha: 'dano todo', sucesso: 'metade do dano' }, dano: { dados: d(nv + 4, 8), mod: 'INT', meioNivel: true, rotulo: 'Dano por turno na zona' } }),
   ele7: (nv) => ({ ativo: { nome: 'Encarnação Elemental', rodadas: 10, nota: `Imune ao seu elemento; quem o acerta corpo a corpo sofre ${d(nv + 1, 10)}; poderes elementais custam metade.` } }),
-  ele8: (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(15 + 3 * (nv - 1), 10) }, nota: 'Um ataque contra todos na área; quem reagir com sucesso sofre metade.' }),
-  res1: (nv) => ({ dano: { dados: d(nv + 1, 8), mod: 'INT', cura: true } }),
+  ele8: (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(15 + 3 * (nv - 1), 10), mod: 'INT', meioNivel: true }, nota: 'Um ataque contra todos na área; quem reagir com sucesso sofre metade.' }),
+  res1: (nv) => ({ dano: { dados: d(nv + 1, 8), mod: true, cura: true }, nota: nv >= 5 ? 'Alvo No Limite recupera o dobro.' : undefined }),
   res2: (nv) => ({ nota: `+${nv} em ataques e Reações.` }),
   res4: (nv) => ({ dano: { dados: d(nv, 6), cura: true, rotulo: 'Cura (por turno)' } }),
-  res5: (nv) => ({ dano: { dados: d(nv + 2, 8), mod: 'INT', cura: true }, nota: 'Todos os aliados na área.' }),
+  res5: (nv) => ({ dano: { dados: d(nv + 2, 8), mod: true, cura: true }, nota: 'Todos os aliados na área.' }),
   res6: (nv) => ({ nota: `${15 + 10 * (nv - 1)} PV temporários antes do dano.` }),
   dom3: (nv) => ({ resistencia: { atr: 'PRE', falha: 'torna-se sua companheira leal' }, nota: nv >= 5 ? 'Chefe derrotado: Resistência com −5.' : undefined }),
   dom4: (nv) => ({ resistencia: { atr: 'FOR', cdBonus: nv - 1, falha: nv >= 3 ? 'Imobilizado e Agarrado por 2 rodadas' : 'Imobilizado' } }),
   aur1: (nv) => ({ ativo: { nome: 'Fortalecimento', rodadas: 10, bonus: { atk: nv, danoCaC: 2 * nv, desl: nv >= 3 ? 3 : 0 } } }),
   aur3: (nv) => ({ resistencia: { atr: 'PRE', cdBonus: nv - 1, falha: 'Amedrontado' }, nota: nv >= 5 ? 'Inimigos 5+ níveis abaixo falham automaticamente.' : undefined }),
   aur4: (nv) => ({ dano: { dados: d(nv + 1, 8), rotulo: 'Dano extra (próximo ataque ou poder)' }, proprio: nv >= 3 ? '1d4' : '1d6', nota: nv >= 5 ? 'Se o ataque for crítico, o Mestre devolve o dano que você sofreu.' : undefined }),
-  aur6: (nv) => ({ resistencia: { atr: 'FOR', falha: 'dano todo e empurrado 6 m', sucesso: 'metade e não é empurrado' }, dano: { dados: d(nv + 5, 6) } }),
+  aur6: (nv) => ({ resistencia: { atr: 'FOR', falha: 'dano todo e empurrado 6 m', sucesso: 'metade e não é empurrado' }, dano: { dados: d(nv + 5, 6), mod: true, meioNivel: true } }),
   aur7: (nv) => ({
     ativo: {
       nome: 'Modo Limite',
@@ -123,15 +143,15 @@ export const PODERES_HAB: Record<string, Def> = {
 export const PODERES_DESP: Record<string, Def> = {
   'd01.rd': (nv) => ({ ativo: { nome: 'RD dobrada', rodadas: nv >= 5 ? 10 : 1, dobrarRD: true } }),
   'd02.lamina': (nv) => ({ ataque: { tipo: 'cac' }, dano: { arma: true, dados: d(nv, 6) } }),
-  'd05.projetil': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 8), mod: 'INT' } }),
+  'd05.projetil': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 8), mod: 'INT', meioNivel: true } }),
   'd06.cura': (nv) => ({ dano: { dados: d(nv, 8), mod: 'PRE', cura: true } }),
   'd07.barreira': (nv) => ({ nota: `+${1 + nv} na Reação de Defender.` }),
   'd09.furia': (nv) => ({
     ativo: { nome: 'Fúria', rodadas: 10, bonus: { danoCaC: 1 + nv, rd: 1 + nv, esq: -2 }, nota: nv >= 3 ? 'Abaixo da metade dos PV, o bônus de dano dobra.' : undefined },
   }),
-  'd10.gelo': (nv) => ({ resistencia: { atr: 'VIT', falha: `Lento por 1 rodada e sofre o dano${nv >= 5 ? ' (falhar por 5+: Imobilizado)' : ''}` }, dano: { dados: d(nv + 1, 6), rotulo: 'Dano (se falhar)' } }),
-  'd13.raio': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 10) }, nota: nv >= 5 ? 'Atingidos não podem usar Reação até o seu próximo turno.' : 'Linha de 18 m.' }),
-  'd14.telecinese': (nv) => ({ resistencia: { atr: 'FOR', falha: 'é movido' }, dano: { dados: d(nv + 1, 6), rotulo: 'Dano se arremessar' } }),
+  'd10.gelo': (nv) => ({ resistencia: { atr: 'VIT', falha: `Lento por 1 rodada e sofre o dano${nv >= 5 ? ' (falhar por 5+: Imobilizado)' : ''}`, sucesso: 'metade do dano' }, dano: { dados: d(nv + 1, 6), mod: 'INT', meioNivel: true, rotulo: 'Dano (falha; sucesso: metade)' } }),
+  'd13.raio': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 10), mod: 'INT', meioNivel: true }, nota: nv >= 5 ? 'Atingidos não podem usar Reação até o seu próximo turno.' : 'Linha de 18 m.' }),
+  'd14.telecinese': (nv) => ({ resistencia: { atr: 'FOR', falha: 'é movido' }, dano: { dados: d(nv + 1, 6), mod: 'INT', meioNivel: true, rotulo: 'Dano se arremessar (ataque de poder)' } }),
   'd15.fera': (nv) => ({
     ativo: { nome: 'Forma bestial', rodadas: 10, bonus: { FOR: 2 * nv, AGI: 2 * nv, desl: 3, desarmado: '1d8' }, nota: nv >= 3 ? 'Regenera 3 PV por turno.' : undefined },
   }),
@@ -140,11 +160,15 @@ export const PODERES_DESP: Record<string, Def> = {
   }),
   'd17.medo': (nv) => ({ resistencia: { atr: 'PRE', cdBonus: nv - 1, falha: nv >= 5 ? 'Amedrontado e Lento' : 'Amedrontado por 1 rodada' } }),
   'd18.toxina': (nv) => ({ nota: `Próximo acerto: Envenenado, ${d(nv + 1, 4)} por 3 rodadas.` }),
-  'd22.gravidade': (nv) => ({ resistencia: { atr: 'FOR', falha: 'Derrubado e Lento' }, dano: nv >= 5 ? { dados: '4d10' } : undefined }),
-  'd24.luz': (nv) => ({ dano: { dados: d(nv + 1, 8), rotulo: 'Cura nos aliados / dano nos monstros' } }),
-  'd25.vento': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 8) }, nota: 'Empurra 3 m.' }),
-  'd28.sangue': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 10) }, nota: `O alvo fica Sangrando (2 por turno).${nv >= 3 ? ' Você cura metade do dano causado.' : ''}` }),
-  'd29.sopro': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(2 * nv + 2, 10) }, nota: 'Cone de 9 m: um ataque contra todos; quem reagir com sucesso sofre metade.' }),
+  'd22.gravidade': (nv) => ({ resistencia: { atr: 'FOR', falha: 'Derrubado e Lento' }, dano: nv >= 5 ? { dados: '4d10', mod: 'INT', meioNivel: true, rotulo: 'Dano (se falhar)' } : undefined }),
+  'd24.luz': (nv) => ({
+    resistencia: { atr: 'PRE', falha: 'dano todo', sucesso: 'metade do dano' },
+    dano: { dados: d(nv + 1, 8), mod: 'PRE', meioNivel: true, rotulo: 'Dano nos inimigos' },
+    nota: `Aliados na área recuperam ${d(nv + 1, 8)} + mod PRE PV.`,
+  }),
+  'd25.vento': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 8), mod: 'INT', meioNivel: true }, nota: 'Empurra 3 m.' }),
+  'd28.sangue': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(nv + 1, 10), mod: 'INT', meioNivel: true }, nota: `O alvo fica Sangrando (2 por turno).${nv >= 3 ? ' Você cura metade do dano causado.' : ''}` }),
+  'd29.sopro': (nv) => ({ ataque: { tipo: 'poder' }, dano: { dados: d(2 * nv + 2, 10), mod: 'VIT', meioNivel: true }, nota: 'Cone de 9 m: um ataque contra todos; quem reagir com sucesso sofre metade.' }),
   'd32.erguer': (nv) => ({ teste: { rotulo: 'Erguer Sombra (PRE)', atr: 'PRE' }, nota: `CD 10 + nível da criatura${nv >= 5 ? ' (+5 se for Chefe)' : ''}. Até 3 tentativas por corpo.` }),
 };
 
@@ -153,7 +177,20 @@ export const PODERES_DESP: Record<string, Def> = {
 const atributosDe = (txt: string) => txt.split('/').map((x) => x.trim()) as AtributoId[];
 
 /** Atributo-chave do Despertar: o texto do poder manda quando cita um; senão, o da primeira árvore afim. */
-const CHAVE_DESP: Record<string, AtributoId[]> = { d05: ['INT'], d06: ['PRE'], d17: ['PRE'], d32: ['PRE'] };
+const CHAVE_DESP: Record<string, AtributoId[]> = {
+  d05: ['INT'],
+  d06: ['PRE'],
+  d10: ['INT'],
+  d13: ['INT'],
+  d14: ['INT'],
+  d17: ['PRE'],
+  d22: ['INT'],
+  d24: ['PRE'],
+  d25: ['INT'],
+  d28: ['INT'],
+  d29: ['VIT'],
+  d32: ['PRE'],
+};
 
 export function chavesHabilidade(habId: string): AtributoId[] {
   return atributosDe(HAB[habId]?.attr ?? 'FOR');
@@ -262,7 +299,7 @@ export function previaPoder(p: Personagem, ef: EfeitoPoder, chaves: AtributoId[]
 }
 
 const bonusTeste = (f: FichaCalculada, t: NonNullable<EfeitoPoder['teste']>) =>
-  t.pericia ? (f.per[t.pericia] ?? 0) : f.nivel + f.m[t.atr ?? 'PRE'] + f.penTeste;
+  (t.pericia ? (f.per[t.pericia] ?? 0) : f.nivel + f.m[t.atr ?? 'PRE'] + f.penTeste) + (t.bonus ?? 0);
 
 /* ---------------- uso (rolagens feitas no servidor) ---------------- */
 
@@ -309,11 +346,15 @@ export function resolverPoder(p: Personagem, ef: EfeitoPoder, chaves: AtributoId
     for (let i = 0; i < vezes; i++) {
       const n = vezes > 1 ? ` ${i + 1}` : '';
       const ra = rolar(d20(atq.atk), sortear)!;
+      const nat = d20Natural(ra);
       const crit = ehCritico(ra, atq.critico);
-      rolagens.push({ rotulo: `Ataque${n} · ${atq.nome}`, r: ra, tipo: 'ataque', critico: atq.critico });
-      if (formula) {
+      // 1 natural no ataque erra sempre: nem rola o dano
+      rolagens.push({ rotulo: `Ataque${n} · ${atq.nome}${nat === 1 ? ' (1 natural: erra)' : ''}`, r: ra, tipo: 'ataque', critico: atq.critico });
+      if (formula && nat !== 1) {
         const rd = rolar(crit ? dobrarDados(formula) : formula, sortear)!;
-        rolagens.push({ rotulo: `${rotuloDano}${n}${crit ? ' (crítico)' : ''}`, r: multiplicar(rd, ef.dano?.mult, ef.dano?.soma), tipo: tipoDano, dobrado: crit });
+        // margem ampliada (19, 18…) só é crítico se o ataque também acertar normalmente
+        const marca = crit ? (nat === 20 ? ' (crítico)' : ' (crítico, se o ataque acertar)') : '';
+        rolagens.push({ rotulo: `${rotuloDano}${n}${marca}`, r: multiplicar(rd, ef.dano?.mult, ef.dano?.soma), tipo: tipoDano, dobrado: crit });
       }
     }
   } else if (formula) {

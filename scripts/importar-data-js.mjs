@@ -114,3 +114,13 @@ arquivo(
 );
 
 arquivo('titulos.ts', ['Titulo'], [['TITULOS', 'Titulo[]', D.TITULOS]]);
+
+// botão "Usar": formas de uso dos Despertares e usos alternativos das habilidades (custo, ação, frequência)
+arquivo(
+  'usos.ts',
+  ['UsoDespertarSite', 'UsoHabilidadeSite'],
+  [
+    ['USOS_DESP', 'Record<string, UsoDespertarSite[]>', D.USOS_DESP ?? {}],
+    ['USOS_HAB', 'Record<string, UsoHabilidadeSite[]>', D.USOS_HAB ?? {}],
+  ],
+);

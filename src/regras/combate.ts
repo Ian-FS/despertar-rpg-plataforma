@@ -1,7 +1,7 @@
 /* Rastreador de combate: iniciativa, passadas, turnos e Pressão (regras.md, cap. 6).
    - Iniciativa: 1d20 + mod AGI, do maior para o menor; empate: maior mod AGI.
    - Passadas: 1ª passada todos em ordem; 2ª só quem tem 2+ Ações Principais; e assim por diante.
-   - Pressão: cada Reação depois da primeira na rodada sofre −2 cumulativo; zera no início do seu turno.
+   - Pressão: cada Defender/Esquivar depois do primeiro na rodada sofre −2 cumulativo, até −6; zera no início do seu turno.
    - Surpreso: não age nem reage na primeira rodada.
    Puro: o servidor rola os dados, grava e dispara o "Início do turno" das fichas. */
 
@@ -40,8 +40,8 @@ export interface EstadoCombate {
 
 export const COMBATE_VAZIO: EstadoCombate = { ativo: false, rodada: 0, vez: null, combatentes: [] };
 
-/** Penalidade de Pressão da próxima Reação (0, −2, −4…). */
-export const pressao = (c: Pick<Combatente, 'reacoes'>) => -2 * c.reacoes;
+/** Penalidade de Pressão do próximo Defender/Esquivar (0, −2, −4, −6, −6…: no máximo −6). */
+export const pressao = (c: Pick<Combatente, 'reacoes'>) => -2 * Math.min(3, c.reacoes);
 
 /** Ordem de iniciativa: maior total; empate pelo maior mod AGI; depois pelo nome (estável). */
 export function ordenar(lista: Combatente[]): Combatente[] {

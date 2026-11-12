@@ -73,11 +73,20 @@ describe('acessórios', () => {
 });
 
 describe('usos do Despertar', () => {
-  it('todos os cadastrados existem e têm custo', () => {
+  it('todos os cadastrados existem, com id único e custo definido', () => {
     for (const [id, usos] of Object.entries(USOS_DESPERTAR)) {
       expect(DESP[id], id).toBeDefined();
-      for (const u of usos) expect(u.pm).toBeGreaterThan(0);
+      expect(new Set(usos.map((u) => u.id)).size, id).toBe(usos.length);
+      for (const u of usos) expect(u.pm, `${id}.${u.id}`).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it('mantém os ids antigos (contadores e efeitos gravados nas fichas)', () => {
+    const ids = (d: string) => USOS_DESPERTAR[d].map((u) => u.id);
+    expect(ids('d01')).toEqual(['rd', 'forma']);
+    expect(ids('d09')).toEqual(['furia']);
+    expect(ids('d32')).toEqual(['erguer', 'invocar', 'trocar']);
+    expect(ids('d04')).toEqual(['forma']); // Velocidade Divina: Forma sem custo, agora com botão
   });
 
   it('libera por nível do Despertar; Forma Evoluída exige nv5 e nível 20', () => {
@@ -86,6 +95,7 @@ describe('usos do Despertar', () => {
     expect(usosDoDespertar(p).map((u) => [u.nome, u.liberado])).toEqual([
       ['Teleporte', true],
       ['Teleporte de esquiva', false],
+      ['Portal Pessoal', false],
     ]);
     p.despertar = { id: 'd01', nv: 5 };
     expect(usosDoDespertar(p).find((u) => u.forma)!.liberado).toBe(false);

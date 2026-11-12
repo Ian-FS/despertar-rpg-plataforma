@@ -34,12 +34,14 @@ import {
 import type { DadosNivel } from '@/componentes/efeitos/revelacoes';
 import type { SorteioAtributos } from '@/regras/criacao';
 import { ARMAS } from '@/regras/dados';
-import { computarFicha, condicoesAtivas, possui } from '@/regras/ficha';
-import { HAB } from '@/regras/dados';
-import { custoUso, PAGA_PM_COM_PV, usosDoDespertar } from '@/regras/despertar-usos';
+import { computarFicha, possui } from '@/regras/ficha';
+import { HAB, USOS_HAB } from '@/regras/dados';
+import { pagarPM } from '@/regras/custo';
+import { custoUso, usosDoDespertar } from '@/regras/despertar-usos';
 import { aplicarCompra, aplicarVenda, precoPedido, validarPedido, type Pedido } from '@/regras/loja';
 import { novoPersonagem, type Personagem } from '@/regras/personagem';
 import {
+  aoMudarPV,
   aoZerarPM,
   aplicarEvento,
   ativarEfeito,
@@ -338,7 +340,12 @@ export interface ResultadoUso extends Resultado {
 function rolarPoder(p: Personagem, ef: EfeitoPoder | null, chaves: AtributoId[], origem: string): ResultadoPoder | undefined {
   if (!ef) return undefined;
   const res = resolverPoder(p, ef, chaves);
-  if (res.danoProprio) p.pvAtual = (p.pvAtual ?? computarFicha(p).pvMax) - res.danoProprio;
+  if (res.danoProprio) {
+    const antes = p.pvAtual ?? computarFicha(p).pvMax;
+    p.pvAtual = antes - res.danoProprio;
+    const linhas = aoMudarPV(p, antes);
+    if (linhas.length) res.nota = [res.nota, ...linhas].filter(Boolean).join(' ');
+  }
   if (ef.ativo) {
     const { dobrarRD, ...efeito } = ef.ativo;
     const bonus = dobrarRD ? { ...efeito.bonus, rd: computarFicha(p).rd } : efeito.bonus;
@@ -394,33 +401,9 @@ export async function usarConsumivel(fichaId: string, itemUid: string): Promise<
   });
 }
 
-/** Gasta o PM de uma habilidade ativa. Sem PM suficiente, pode pagar o dobro em PV e ficar Exausto. */
-/**
- * Paga o custo em PM. Sem PM suficiente: Exaustão de Mana (dobro em PV e fica Exausto), ou,
- * com a Hemomancia, paga o mesmo valor em PV sem Exaustão. Devolve a mensagem, ou um erro.
- */
-function pagarPM(p: Personagem, nome: string, custo: number, pagarComPV: boolean): { mensagem?: string; erro?: string } {
-  const f = computarFicha(p);
-  const pm = p.pmAtual ?? f.pmMax;
-  const pv = p.pvAtual ?? f.pvMax;
-  if (custo <= 0) return { mensagem: `${nome}: sem custo de PM.` };
-  if (pm >= custo) {
-    p.pmAtual = pm - custo;
-    return { mensagem: `${nome}: −${custo} PM (${pm} → ${p.pmAtual})` };
-  }
-  if (!pagarComPV) return { erro: `PM insuficiente: ${nome} custa ${custo} PM e você tem ${pm}.` };
-  if (PAGA_PM_COM_PV.has(p.despertar.id)) {
-    p.pvAtual = pv - custo;
-    return { mensagem: `Hemomancia: ${nome} custou ${custo} PV (${pv} → ${p.pvAtual}).` };
-  }
-  p.pvAtual = pv - 2 * custo;
-  const conds = condicoesAtivas(p);
-  if (!conds.includes('Exausto')) p.condicoes = [...conds, 'Exausto'].join(', ');
-  return { mensagem: `Exaustão de Mana: ${nome} custou ${2 * custo} PV (${pv} → ${p.pvAtual}). Você está Exausto.` };
-}
-
 /** Gasta o PM de uma habilidade ativa. */
-export async function usarHabilidade(fichaId: string, habId: string, pagarComPV = false): Promise<ResultadoUso> {
+/** `alt`: uso alternativo liberado pelo nível (USOS_HAB do site), ex.: "primeiro da rodada custa 0 PM". */
+export async function usarHabilidade(fichaId: string, habId: string, pagarComPV = false, alt?: number): Promise<ResultadoUso> {
   return tentar(async () => {
     const ctx = await contextoFicha(fichaId);
     const p = ctx.p;
@@ -430,13 +413,21 @@ export async function usarHabilidade(fichaId: string, habId: string, pagarComPV 
     const lim = limiteHabilidade(habId, possui(p, habId)!.nv);
     const esgotado = erroLimite(p, h.n, lim);
     if (esgotado) return { erro: esgotado };
-    const r = pagarPM(p, h.n, h.pm, pagarComPV);
+    const nv = possui(p, habId)!.nv;
+    const uso = alt === undefined ? null : USOS_HAB[habId]?.[alt];
+    if (alt !== undefined && (!uso || nv < uso.desde)) return { erro: 'Esse uso ainda não foi liberado.' };
+    if (alt === undefined && USOS_HAB[habId]?.some((u) => u.substitui && nv >= u.desde)) return { erro: 'Use a forma liberada pelo nível.' };
+    const nome = uso ? `${h.n} (${uso.n})` : h.n;
+    const r = pagarPM(p, nome, uso ? uso.pm : h.pm, pagarComPV);
     if (r.erro) return { erro: r.erro };
     if (lim) registrarUso(p, lim);
-    const poder = rolarPoder(p, efeitoHabilidade(p, habId), chavesHabilidade(habId), `hab:${habId}`);
+    const ef = efeitoHabilidade(p, habId);
+    // Projétil Elemental nv5: dois projéteis numa Ação Principal
+    if (ef && habId === 'ele1' && uso && ef.ataque) ef.ataque = { ...ef.ataque, vezes: 2 };
+    const poder = rolarPoder(p, ef, chavesHabilidade(habId), `hab:${habId}`);
     const zerou = aoZerarPM(p);
     await gravarFicha(fichaId, p);
-    await registrarRolagens(ctx, rolagensDoPoder(h.n, poder));
+    await registrarRolagens(ctx, rolagensDoPoder(nome, poder));
     return { mudanca: mudancaDe(p), mensagem: [r.mensagem, zerou].filter(Boolean).join(' '), poder };
   });
 }

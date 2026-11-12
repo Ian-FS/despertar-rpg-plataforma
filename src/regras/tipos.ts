@@ -113,6 +113,34 @@ export interface Despertar {
   forma: string;
 }
 
+/** Forma de uso de um Despertar, como o site publica (USOS_DESP). */
+export interface UsoDespertarSite {
+  n: string;
+  acao: string;
+  /** custo em PM */
+  pm?: number;
+  /** custo a partir do Despertar nv5 */
+  pm5?: number;
+  /** ação a partir do Despertar nv5 */
+  acao5?: string;
+  /** custo = 2 PM por Rank (Sombras) */
+  pmRank?: boolean;
+  freq?: string;
+  /** nível do Despertar que libera */
+  desde?: number;
+  forma?: boolean;
+}
+
+/** Uso alternativo de uma habilidade (USOS_HAB), ex.: "primeiro da rodada custa 0 PM". */
+export interface UsoHabilidadeSite {
+  n: string;
+  pm: number;
+  /** nível da habilidade que libera */
+  desde: number;
+  /** substitui o uso normal (em vez de ser mais uma opção) */
+  substitui?: boolean;
+}
+
 export interface Descritivo {
   n: string;
   desc: string;

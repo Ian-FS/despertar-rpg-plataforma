@@ -5,18 +5,18 @@ import { ARV, ARVORES, BESTIARIO, DESP, DESPERTARES, HAB, HABILIDADES, PERICIAS,
 import { EFEITOS_DESP, EFEITOS_HAB } from './efeitos';
 
 describe('habilidades', () => {
-  it('10 árvores com 8 habilidades cada, E a S', () => {
+  it('10 árvores, cada uma com a base E, E, D, D, C, B, A, S (a revisão 2 trouxe 5 extras)', () => {
     expect(ARVORES).toHaveLength(10);
-    expect(HABILIDADES).toHaveLength(80);
+    expect(HABILIDADES).toHaveLength(85);
     for (const a of ARVORES) {
       const hs = HABILIDADES.filter((h) => h.t === a.id);
-      expect(hs, a.nome).toHaveLength(8);
-      expect(hs.map((h) => h.r).sort()).toEqual(['A', 'B', 'C', 'D', 'D', 'E', 'E', 'S'].sort());
+      expect(hs.length, a.nome).toBeGreaterThanOrEqual(8);
+      for (const r of ['E', 'D', 'C', 'B', 'A', 'S']) expect(hs.some((h) => h.r === r), `${a.nome} ${r}`).toBe(true);
     }
   });
 
   it('ids únicos e pré-requisitos existentes', () => {
-    expect(new Set(HABILIDADES.map((h) => h.id)).size).toBe(80);
+    expect(new Set(HABILIDADES.map((h) => h.id)).size).toBe(HABILIDADES.length);
     for (const h of HABILIDADES) for (const [id] of h.pre) expect(HAB[id], `${h.n} → ${id}`).toBeDefined();
   });
 

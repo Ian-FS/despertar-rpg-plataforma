@@ -43,6 +43,7 @@ describe('combate', () => {
     let r = iniciarCombate([c('A', 20), c('B', 10)]);
     r.estado.combatentes = r.estado.combatentes.map((x) => (x.uid === 'B' ? { ...x, reacoes: 2 } : x));
     expect(pressao(r.estado.combatentes[1])).toBe(-4);
+    expect(pressao({ reacoes: 5 })).toBe(-6); // no máximo −6
     r = proximaVez(r.estado);
     expect(r.estado.combatentes.find((x) => x.uid === 'B')!.reacoes).toBe(0);
   });

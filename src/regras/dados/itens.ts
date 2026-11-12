@@ -284,6 +284,36 @@ export const AFIXOS: Record<"arma" | "armadura" | "acessorio", Afixo[]> = {
       "n": "Pesada",
       "sufixo": "do Impacto",
       "desc": "Acertos empurram o alvo 1,5 m (3 m se o item for Rank A ou S)."
+    },
+    {
+      "n": "Ceifadora",
+      "sufixo": "da Colheita",
+      "desc": "Ao derrubar um inimigo, +X no próximo ataque desta rodada."
+    },
+    {
+      "n": "Sagrada",
+      "sufixo": "da Aurora",
+      "desc": "+Xd4 de dano contra mortos-vivos, demônios e criaturas de sombra."
+    },
+    {
+      "n": "Silenciosa",
+      "sufixo": "do Silêncio",
+      "desc": "+2X em Furtividade; ataques contra alvos Surpresos causam +X de dano."
+    },
+    {
+      "n": "Leal",
+      "sufixo": "da Lealdade",
+      "desc": "Não pode ser desarmada; volta à sua mão como Ação Livre."
+    },
+    {
+      "n": "Quebradora",
+      "sufixo": "da Ruptura",
+      "desc": "O alvo atingido sofre −X na próxima Reação de Defender."
+    },
+    {
+      "n": "Sedenta",
+      "sufixo": "do Fluxo",
+      "desc": "Ao causar um crítico, recupera X PV e X PM."
     }
   ],
   "armadura": [
@@ -341,6 +371,11 @@ export const AFIXOS: Record<"arma" | "armadura" | "acessorio", Afixo[]> = {
       "n": "Sombria",
       "sufixo": "das Sombras",
       "desc": "+2X em Furtividade."
+    },
+    {
+      "n": "Refletora",
+      "sufixo": "do Espelho",
+      "desc": "1× por combate, ao resistir a um poder, devolva Xd6 de dano ao conjurador."
     }
   ],
   "acessorio": [
@@ -398,6 +433,11 @@ export const AFIXOS: Record<"arma" | "armadura" | "acessorio", Afixo[]> = {
       "n": "Ligeiro",
       "sufixo": "da Lebre",
       "desc": "+X m de deslocamento."
+    },
+    {
+      "n": "Vigilante",
+      "sufixo": "da Vigília",
+      "desc": "+X em Iniciativa."
     }
   ]
 };
@@ -449,7 +489,7 @@ export const SELOS: Descritivo[] = [
   },
   {
     "n": "Inquebrável",
-    "desc": "O item não pode ser destruído e falhas de Refino nunca o fazem perder níveis."
+    "desc": "O item não pode ser destruído, desarmado nem tirado de você contra a sua vontade."
   }
 ];
 
@@ -493,15 +533,15 @@ export const CONSUMIVEIS: Descritivo[] = [
   },
   {
     "n": "Cristal de Mana",
-    "desc": "Material de Refino. Vale 20% do preço base do Rank em Ouro."
+    "desc": "Mana solidificada, com Rank. Moeda e material de Refino. Vende por: E 10 · D 40 · C 160 · B 600 · A 2.400 · S 10.000 Ouro."
   },
   {
     "n": "Núcleo de Chefe",
-    "desc": "Coração cristalizado de um Chefe. Usado para Ascender itens ou criar equipamentos."
+    "desc": "Coração cristalizado de um Chefe, com o Rank do Portal. Todo Chefe deixa 1. Serve para Ascender itens (Núcleo do Rank seguinte ao do item) ou Forjar."
   },
   {
     "n": "Pó de Purificação",
-    "desc": "Remove uma maldição ou o estado Rachado de um item."
+    "desc": "Remove a maldição de um item (o item continua com seus afixos e Selos)."
   },
   {
     "n": "Pergaminho de Selo",

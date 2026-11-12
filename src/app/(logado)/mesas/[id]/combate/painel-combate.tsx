@@ -149,7 +149,7 @@ function CombateAtivo({ mesaId, estado, grupo, souMestre, usuarioId }: Props) {
                 </span>
                 {c.tipo === 'inimigo' && <BarraPV pv={c.pv ?? 0} max={c.pvMax ?? 1} numeros={souMestre} />}
               </span>
-              <span className="flex items-center gap-1 text-xs" title="Pressão: cada Reação depois da primeira na rodada sofre −2. Zera no início do turno.">
+              <span className="flex items-center gap-1 text-xs" title="Pressão: cada Defender ou Esquivar depois do primeiro na rodada sofre −2 (no máximo −6). Zera no início do turno.">
                 <span className={pen < 0 ? 'text-perigo' : 'text-apagado'}>
                   {c.reacoes ? `${c.reacoes} reaç${c.reacoes > 1 ? 'ões' : 'ão'} · próxima ${pen || '±0'}` : 'Pressão 0'}
                 </span>

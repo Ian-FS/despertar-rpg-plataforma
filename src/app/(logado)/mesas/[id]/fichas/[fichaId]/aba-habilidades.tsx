@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { CartaoDespertar, CartaoHabilidade, COR_RANK } from '@/componentes/cartoes';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
-import { ARVORES, DESP, HAB, HABILIDADES } from '@/regras/dados';
+import { ARVORES, DESP, HAB, HABILIDADES, USOS_HAB } from '@/regras/dados';
 import {
   afinidades,
   checarRequisitos,
@@ -15,7 +15,8 @@ import {
   possui,
 } from '@/regras/ficha';
 import { RANK_IDS, type ArvoreId, type Habilidade, type Rank } from '@/regras/tipos';
-import { custoUso, PAGA_PM_COM_PV, usosDoDespertar } from '@/regras/despertar-usos';
+import { custoEmPV } from '@/regras/custo';
+import { custoUso, usosDoDespertar } from '@/regras/despertar-usos';
 import {
   chavesDespertar,
   chavesHabilidade,
@@ -72,7 +73,7 @@ function Despertar({ p, salvo, alterar, aplicarMudanca, podeEditar, souMestre, f
       x={x}
       rodape={
         <>
-        <UsosDespertar p={p} salvo={salvo} podeEditar={podeEditar} fichaId={fichaId} aplicarMudanca={aplicarMudanca} />
+        <UsosDespertar salvo={salvo} podeEditar={podeEditar} fichaId={fichaId} aplicarMudanca={aplicarMudanca} />
         <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-linha pt-3">
           <span className="font-semibold">Nível {nv} de 5</span>
           {gratis > 0 && <span className="text-xs text-apagado">({gratis} nível(is) grátis pelos novos Ranks)</span>}
@@ -94,12 +95,11 @@ function Despertar({ p, salvo, alterar, aplicarMudanca, podeEditar, souMestre, f
 }
 
 function UsosDespertar({
-  p,
   salvo,
   podeEditar,
   fichaId,
   aplicarMudanca,
-}: Pick<PropsAba, 'p' | 'salvo' | 'podeEditar' | 'fichaId' | 'aplicarMudanca'>) {
+}: Pick<PropsAba, 'salvo' | 'podeEditar' | 'fichaId' | 'aplicarMudanca'>) {
   const [rank, setRank] = useState<Rank>('E');
   // usa o nível já confirmado do Despertar (o rascunho ainda não vale)
   const usos = usosDoDespertar(salvo);
@@ -127,7 +127,7 @@ function UsosDespertar({
               pm={custoUso(salvo, u, rank)}
               executar={(comPV) => usarDespertar(fichaId, u.id, rank, comPV)}
               aplicarMudanca={aplicarMudanca}
-              hemomancia={PAGA_PM_COM_PV.has(p.despertar.id)}
+              pagarPV={custoEmPV(salvo, custoUso(salvo, u, rank))}
             />
           )}
         </div>
@@ -164,15 +164,18 @@ function Minhas({ p, salvo, alterar, aplicarMudanca, podeEditar, souMestre, fich
                   </span>
                 </button>
                 <span className="font-mono text-sm">nv {x.nv}</span>
-                {podeEditar && h.tipo === 'Ativa' && h.pm > 0 && salvo.habs.some((y) => y.id === x.id) && (
-                  <BotaoUsar
-                    limite={limiteDe(salvo, limiteHabilidade(x.id, salvo.habs.find((y) => y.id === x.id)!.nv))}
-                    pm={h.pm}
-                    executar={(comPV) => usarHabilidade(fichaId, x.id, comPV)}
-                    aplicarMudanca={aplicarMudanca}
-                    hemomancia={PAGA_PM_COM_PV.has(p.despertar.id)}
-                  />
-                )}
+                {podeEditar && h.tipo === 'Ativa' && h.pm > 0 && salvo.habs.some((y) => y.id === x.id) &&
+                  usosHabilidade(x.id, salvo.habs.find((y) => y.id === x.id)!.nv).map((uso) => (
+                    <BotaoUsar
+                      key={uso.alt ?? 'normal'}
+                      rotulo={uso.nome}
+                      limite={limiteDe(salvo, limiteHabilidade(x.id, salvo.habs.find((y) => y.id === x.id)!.nv))}
+                      pm={uso.pm}
+                      executar={(comPV) => usarHabilidade(fichaId, x.id, comPV, uso.alt)}
+                      aplicarMudanca={aplicarMudanca}
+                      pagarPV={custoEmPV(salvo, uso.pm)}
+                    />
+                  ))}
                 {podeEditar && x.nv < 5 && (
                   <button
                     className="botao px-2 py-0.5 text-xs"
@@ -398,11 +401,18 @@ function PainelPoder({ titulo, res, onFechar }: { titulo: string; res: Resultado
   );
 }
 
+/** Uso normal da habilidade e os alternativos que o nível já liberou (USOS_HAB do site). */
+function usosHabilidade(habId: string, nv: number): { nome?: string; pm: number; alt?: number }[] {
+  const alts = (USOS_HAB[habId] ?? []).map((u, i) => ({ ...u, i })).filter((u) => nv >= u.desde);
+  const normal = alts.some((u) => u.substitui) ? [] : [{ pm: HAB[habId].pm }];
+  return [...normal, ...alts.map((u) => ({ nome: u.n, pm: u.pm, alt: u.i }))];
+}
+
 function BotaoUsar({
   pm,
   executar,
   aplicarMudanca,
-  hemomancia,
+  pagarPV,
   rotulo,
   limite,
 }: {
@@ -411,7 +421,8 @@ function BotaoUsar({
   pm: number;
   executar: (comPV: boolean) => Promise<ResultadoUso>;
   aplicarMudanca: PropsAba['aplicarMudanca'];
-  hemomancia?: boolean;
+  /** quanto custaria pagar com PV (Exaustão de Mana ou Hemomancia); null = os PV não bastam */
+  pagarPV: { pm: number; pv: number; hemomancia: boolean } | null;
   rotulo?: string;
 }) {
   const efeitos = useEfeitos();
@@ -444,10 +455,17 @@ function BotaoUsar({
   if (semPM)
     return (
       <span className="flex w-full flex-wrap items-center gap-2 border border-perigo/60 bg-perigo/10 px-2 py-1 text-xs text-perigo">
-        {semPM} {hemomancia ? `Hemomancia: pagar ${pm} PV?` : `Exaustão de Mana: pagar ${2 * pm} PV e ficar Exausto?`}
-        <button className="botao border-perigo bg-transparent px-2 py-0.5 text-xs text-perigo" disabled={pendente} onClick={() => usar(true)}>
-          Pagar com PV
-        </button>
+        {semPM}{' '}
+        {!pagarPV
+          ? 'Os PV não bastam para pagar com PV (precisa sobrar mais de 0 PV).'
+          : pagarPV.hemomancia
+            ? `Hemomancia: pagar ${pagarPV.pv} PV?`
+            : `Exaustão de Mana: gastar ${pagarPV.pm} PM e ${pagarPV.pv} PV e ficar Exausto?`}
+        {pagarPV && (
+          <button className="botao border-perigo bg-transparent px-2 py-0.5 text-xs text-perigo" disabled={pendente} onClick={() => usar(true)}>
+            Pagar com PV
+          </button>
+        )}
         <button className="botao botao-discreto px-2 py-0.5 text-xs" onClick={() => setSemPM(null)}>
           Cancelar
         </button>

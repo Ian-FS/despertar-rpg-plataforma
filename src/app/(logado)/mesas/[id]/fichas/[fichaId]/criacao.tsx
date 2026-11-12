@@ -239,7 +239,7 @@ function descreverSorteio(s: SorteioLinha): string {
         r.escolhida ? `. Escolhida: ${HAB[r.escolhida].n}.` : '. Aguardando escolha.'
       }`;
     case 'nivel':
-      return `Nível ${r.novoNivel}: Status 1d6 = ${r.status.rolagens.join(' → ')} (+${r.status.valor}), PH 1d6 = ${r.ph.rolagens.join(' → ')} (+${r.ph.valor})${
+      return `Nível ${r.novoNivel}: Status ${r.status.rolagens.length ? `1d6 = ${r.status.rolagens.join(' → ')} ` : ''}(+${r.status.valor}), PH 1d6 = ${r.ph.rolagens.join(' → ')} (+${r.ph.valor})${
         r.novoRank ? `. Novo Rank ${r.novoRank}!` : '.'
       }`;
     default:

@@ -58,6 +58,28 @@ Automático hoje: Circulação de Mana (PM por turno, metade no descanso curto n
 
 Fica para a Fase 2 (precisa de rodadas, alvos ou resultado do ataque):
 - "1× por rodada" e "sem custo 1× por rodada" (Corte Rápido nv5, Contra-Ataque nv5, Guardião nv5, Égide nv5, Troca de Alma nv5, Passo Instantâneo, Precognição).
-- Gatilhos de acerto e derrota (Absorção, Marca do Caçador nv5, Legião nv5) e Imortal Menor (volta com 25% ao chegar a 0 PV).
+- Gatilhos de acerto e derrota (Absorção, Marca do Caçador nv5, Legião nv5).
 - PV temporários (Titã, Égide Sagrada) e efeitos lançados em aliados (Bênção de Vigor, Regeneração, Santuário, Ponto Fraco).
-- Formas Evoluídas sem custo de PM com "1×/combate" ou "1×/dia" (Velocidade Divina, Tiro Inevitável, Imortal Menor, Mil Futuros): ainda sem botão.
+
+Pelo princípio "a plataforma calcula e mostra, o Mestre decide" (PLANO.md), esses só entram se fizerem falta jogando.
+
+
+## Revisão 2 das regras (site do Maickon, 12/11/2026)
+
+O `data.js` foi reimportado pelo script (`node scripts/importar-data-js.mjs <data.js>`), que agora também traz a tabela de usos do botão "Usar" (`USOS_DESP` e `USOS_HAB`, em `src/regras/dados/usos.ts`). O que mudou no jogo:
+
+- **5 habilidades novas**: Aparar e Responder (Lâmina), Lâminas Arremessadas (Vulto), Aceleração (Restauração), Dissipar Mana (Sentidos) e Mão Invisível (Aura). As quatro com rolagem já rolam ataque, dano, teste ou CD.
+- **Textos de todas as habilidades e Despertares** reescritos sem lacunas: frequência sempre escrita ("À vontade", "1× por rodada"…), alcance e totais no nv5.
+- **Status por nível**: 2 fixos (antes 1d6). A Bênção do Sistema vale só para o d6 de PH.
+- **No Limite** (0 PV ou menos) substitui o Incapacitado: cai Derrubado, continua lutando com 1 Ação Principal (Fortaleza Viva nv3, Corpo Imortal nv3 e Fúria nv5 mantêm as Ações) e morre em −PV máximos (Corpo Imortal: −2×; nv5: só morte instantânea). Terminar o combate No Limite deixa Inconsciente até cura ou descanso longo.
+- **Exaustão de Mana**: gasta todos os PM e paga só a diferença em dobro, com PV; não pode chegar a 0 PV assim. Hemomancia paga 1 PV por PM, também sem chegar a 0.
+- **Pressão**: só Defender e Esquivar; no máximo −6.
+- **Crítico**: 1 natural no ataque erra sempre (o poder nem rola o dano). Na margem ampliada (19, 18…) só é crítico se o ataque também acertar: o dano dobrado aparece como "crítico, se o ataque acertar".
+- **Escudo**: Defender +2 + Bônus de Rank; o Refino do escudo dá RD.
+- **Afixo repetido** em dois itens equipados não soma: vale o maior.
+- **Refino** sem teste nem falha (só cristais); Mestre das Runas gasta 1 cristal a menos. A plataforma já tratava o Refino como um número que o jogador ajusta; acessórios não recebem Refino.
+- **Poderes**: vários danos agora dizem "+ mod + metade do Nível" (Impacto Sísmico, Explosão de Chamas, Prisão de Gelo, Corrente de Raios, Tempestade Elemental, Cataclismo, Disparo Estelar, Explosão de Aura e os ataques dos Despertares). Cura e Onda Restauradora usam o maior entre INT e PRE. O Sopro do Coração de Dragão usa VIT; a Lâmina de sangue, INT. Corte Vácuo: alcance 12 m + 6 m por nível.
+- **Botão Usar**: os Despertares agora mostram todas as formas de uso do site, inclusive as Formas sem custo (Velocidade Divina, Tiro Inevitável, Mil Futuros) e as liberadas no nv3/nv5 (Parar projéteis, Nuvem tóxica, Trocar com clone…). As habilidades mostram os usos alternativos ("Primeiro da rodada: 0 PM", "Cura como Ação de Movimento: 6 PM", "Dois projéteis: 4 PM"…); quem controla o "primeiro da rodada" é o jogador e o Mestre.
+- **Imortal Menor** (Forma do Sangue Fervente) passou a ser automático: ao cair a 0 PV, volta a 25%, 1× por dia.
+
+O `regras.md` do repositório é o texto do PDF antigo. O livro atualizado está no site; as regras acima já estão no código.

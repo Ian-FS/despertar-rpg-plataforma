@@ -10,6 +10,7 @@ export * from './despertares';
 export * from './itens';
 export * from './portais';
 export * from './titulos';
+export * from './usos';
 
 const indexar = <T extends { id: string }>(lista: T[]) => Object.fromEntries(lista.map((x) => [x.id, x])) as Record<string, T>;
 

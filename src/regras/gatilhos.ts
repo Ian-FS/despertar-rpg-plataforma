@@ -185,6 +185,32 @@ export function aoZerarPM(p: Personagem): string | null {
   return `Circulação de Mana: PM a zero, recuperou ${p.pmAtual} PM.`;
 }
 
+/* ---------------- No Limite (0 PV ou menos) ---------------- */
+
+/**
+ * Depois de os PV mudarem: ao cair a 0 ou menos, o personagem fica No Limite (cai Derrubado e segue
+ * lutando com 1 Ação Principal); Imortal Menor (Sangue Fervente, Forma) o traz de volta a 25%, 1× por dia.
+ * Avisa também quando os PV chegam ao ponto de morte. Devolve as linhas para mostrar.
+ */
+export function aoMudarPV(p: Personagem, pvAntes: number): string[] {
+  const linhas: string[] = [];
+  const f = computarFicha(p);
+  const pv = p.pvAtual ?? f.pvMax;
+  if (pvAntes > 0 && pv <= 0) {
+    const imortalMenor = p.despertar.id === 'd12' && p.despertar.nv >= 5 && p.nivel >= 20 && !p.usos['dia:desp:d12.forma'];
+    if (imortalMenor) {
+      p.pvAtual = Math.floor(f.pvMax / 4);
+      p.usos = { ...p.usos, 'dia:desp:d12.forma': 1 };
+      linhas.push(`Imortal Menor: voltou a ${p.pvAtual} PV.`);
+      return linhas;
+    }
+    adicionarCondicao(p, 'Derrubado');
+    linhas.push(f.noLimite && f.acoes > 1 ? 'No Limite: caiu Derrubado, mas continua lutando com todas as Ações.' : 'No Limite: caiu Derrubado e continua lutando com 1 Ação Principal.');
+  }
+  if (f.pvMorte !== null && pv <= f.pvMorte && pvAntes > f.pvMorte) linhas.push(`PV em ${pv}: chegou a ${f.pvMorte}, é a morte.`);
+  return linhas;
+}
+
 /* ---------------- eventos ---------------- */
 
 export function aplicarEvento(p: Personagem, evento: Evento, sortear: Sorteio = sortearCrypto): ResultadoEvento {
@@ -192,6 +218,7 @@ export function aplicarEvento(p: Personagem, evento: Evento, sortear: Sorteio = 
   const f = computarFicha(p);
 
   if (evento === 'inicioTurno') {
+    const pvAntes = p.pvAtual ?? f.pvMax;
     // 1) efeitos que rolam todo turno (veneno, queimadura, regeneração)
     for (const e of p.efeitosAtivos) {
       if (!e.porTurno) continue;
@@ -205,12 +232,18 @@ export function aplicarEvento(p: Personagem, evento: Evento, sortear: Sorteio = 
     // 2) passivas
     for (const x of p.habs) INICIO_TURNO_HAB[x.id]?.({ p, f, nv: x.nv, linhas: res.linhas });
     INICIO_TURNO_DESP[p.despertar.id]?.({ p, f, nv: p.despertar.nv, linhas: res.linhas });
+    res.linhas.push(...aoMudarPV(p, pvAntes));
     // 3) a duração diminui
     for (const e of [...p.efeitosAtivos]) {
       if (e.rodadas === null) continue;
       e.rodadas -= 1;
       if (e.rodadas <= 0) encerrarEfeito(p, e.uid, res.linhas);
     }
+  }
+
+  if (evento === 'fimCombate' && (p.pvAtual ?? f.pvMax) <= 0) {
+    adicionarCondicao(p, 'Inconsciente');
+    res.linhas.push('Terminou o combate No Limite: desmaia (Inconsciente) até receber cura acima de 0 PV ou um descanso longo.');
   }
 
   if (evento === 'fimCombate' || evento === 'descansoLongo') {
@@ -234,8 +267,9 @@ export function aplicarEvento(p: Personagem, evento: Evento, sortear: Sorteio = 
     const g = computarFicha(p); // já sem os efeitos que acabaram
     p.pvAtual = g.pvMax;
     p.pmAtual = g.pmMax;
-    removerCondicao(p, 'Exausto');
-    res.linhas.push('Descanso longo: PV e PM restaurados, Exausto removido.');
+    const tirou = ['Exausto', 'Inconsciente'].filter((c) => condicoesAtivas(p).includes(c));
+    for (const c of tirou) removerCondicao(p, c);
+    res.linhas.push(`Descanso longo: PV e PM restaurados${tirou.length ? `, ${tirou.join(' e ')} removido` : ''}.`);
   }
 
   return res;
