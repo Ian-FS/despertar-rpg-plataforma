@@ -147,8 +147,8 @@ Cada fase termina com algo que o grupo já usa. Trabalho em branches, uma por ta
 - [x] Ficha atualiza sozinha nas outras telas, com aviso do que o Mestre mudou
 - [ ] Chat da mesa
 - [ ] Webhook do Discord (rolagens públicas vão para o canal)
-- [ ] Painel do grupo (PV, PM, condições de todos)
-- [ ] Rastreador de combate: iniciativa, passadas, Pressão, turnos, duração de condições
+- [x] Painel do grupo (PV, PM, condições de todos), ao vivo
+- [x] Rastreador de combate: iniciativa, passadas, Pressão, turnos, Surpreso; o Início do turno das fichas dispara sozinho (inimigos rápidos com PV no próprio rastreador; NPC com ficha fica para a Fase 3)
 - [ ] Ataque × Reação conduzido (Defender/Esquivar, crítico, área = metade, Defesa Passiva e Defesa Fixa de Lacaios); o dano no alvo entra com a confirmação do Mestre
 - Sobras de regras (em [divergencias.md](divergencias.md): "1× por rodada", gatilhos de acerto e derrota, PV temporários, efeitos em aliados) só entram se fizerem falta em sessão; até lá o Mestre resolve na mão
 

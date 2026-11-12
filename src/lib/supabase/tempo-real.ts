@@ -17,7 +17,8 @@ export function assinar(
     if (!ativo) return;
     await sb.realtime.setAuth(data.session?.access_token ?? null);
     if (!ativo) return;
-    canal = configurar(sb.channel(nome)).subscribe((status) => aoMudarStatus?.(status === 'SUBSCRIBED'));
+    // nome único: duas telas assinando a mesma coisa não podem dividir o canal
+    canal = configurar(sb.channel(`${nome}:${Math.random().toString(36).slice(2, 8)}`)).subscribe((status) => aoMudarStatus?.(status === 'SUBSCRIBED'));
   })();
   return () => {
     ativo = false;

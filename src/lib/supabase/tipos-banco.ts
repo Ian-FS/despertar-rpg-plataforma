@@ -1,6 +1,7 @@
 /* Tipos das tabelas do Supabase (espelham supabase/migrations/). Atualize junto com as migrations.
    Precisam ser `type` (não `interface`) para encaixar no formato que o supabase-js espera. */
 
+import type { EstadoCombate } from '@/regras/combate';
 import type { Rolagem } from '@/regras/rolagem';
 
 export type PapelMesa = 'mestre' | 'jogador';
@@ -83,6 +84,24 @@ export type RolagemLinha = {
   criado_em: string;
 };
 
+export type FichaPublicoLinha = {
+  id: string;
+  mesa_id: string;
+  dono_id: string;
+  tipo: 'jogador' | 'npc';
+  ativa: boolean;
+  etapa: EtapaFicha;
+  resumo: ResumoFicha | Record<string, never>;
+  atualizado_em: string;
+};
+
+export type CombateLinha = {
+  mesa_id: string;
+  estado: EstadoCombate;
+  versao: number;
+  atualizado_em: string;
+};
+
 export type Membro = {
   mesa_id: string;
   usuario_id: string;
@@ -109,6 +128,18 @@ export type Database = {
         Row: FichaLinha;
         Insert: Partial<FichaLinha> & Pick<FichaLinha, 'mesa_id' | 'dono_id' | 'dados'>;
         Update: Partial<FichaLinha>;
+        Relationships: [];
+      };
+      fichas_publico: {
+        Row: FichaPublicoLinha;
+        Insert: { [_ in never]: never };
+        Update: { [_ in never]: never };
+        Relationships: [];
+      };
+      combates: {
+        Row: CombateLinha;
+        Insert: Omit<CombateLinha, 'atualizado_em'> & { atualizado_em?: string };
+        Update: Partial<CombateLinha>;
         Relationships: [];
       };
       rolagens: {

@@ -6,6 +6,7 @@ import { REGRAS_PADRAO } from '@/lib/fichas/regras-padrao';
 import { clienteServidor, usuarioAtual } from '@/lib/supabase/servidor';
 import type { Personagem } from '@/regras/personagem';
 import { normalizarPersonagem } from '@/regras/validacao';
+import { BarraCombate } from '../../combate/barra-combate';
 import { Criacao } from './criacao';
 import { EscolhaAvaliacao } from './escolha-avaliacao';
 import { FichaEditor } from './ficha-editor';
@@ -28,11 +29,12 @@ async function Conteudo({ params }: { params: Promise<{ id: string; fichaId: str
   if (!usuario) return null;
   const supabase = await clienteServidor();
 
-  const [{ data: ficha }, { data: mesa }, { data: eu }, { data: sorteios }] = await Promise.all([
+  const [{ data: ficha }, { data: mesa }, { data: eu }, { data: sorteios }, { data: combate }] = await Promise.all([
     supabase.from('fichas').select('*').eq('id', fichaId).eq('mesa_id', id).maybeSingle(),
     supabase.from('mesas').select('nome, regras').eq('id', id).maybeSingle(),
     supabase.from('membros').select('papel').eq('mesa_id', id).eq('usuario_id', usuario.id).maybeSingle(),
     supabase.from('sorteios').select('*').eq('ficha_id', fichaId).order('criado_em'),
+    supabase.from('combates').select('estado').eq('mesa_id', id).maybeSingle(),
   ]);
   // a RLS só devolve a ficha para o dono e para o Mestre
   if (!ficha || !mesa) notFound();
@@ -79,6 +81,7 @@ async function Conteudo({ params }: { params: Promise<{ id: string; fichaId: str
               opcoes={avaliacaoPendente.resultado.opcoes}
             />
           )}
+          <BarraCombate mesaId={id} fichaId={ficha.id} inicial={combate?.estado ?? null} usuarioId={usuario.id} souMestre={souMestre} />
           <FichaEditor
             // recria o editor quando o servidor muda a ficha (subir de nível, Avaliação, novo sorteio)
             key={ficha.atualizado_em}

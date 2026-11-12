@@ -182,10 +182,9 @@ export function FichaEditor({
     setSalvo(remota);
     setP(r);
     if (linha.alterado_por && linha.alterado_por !== usuarioId) {
-      const quem = souMestre ? "O jogador" : "O Mestre";
       efeitos.som("sistema");
       efeitos.aviso(
-        `[ SISTEMA ] ${quem} alterou a ficha. ${descreverMudanca(salvo, remota)}`,
+        `[ SISTEMA ] Ficha atualizada. ${descreverMudanca(salvo, remota)}`,
         "sys",
       );
     }
