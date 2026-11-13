@@ -3,11 +3,13 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { Carregando } from '@/componentes/efeitos/carregando';
 import { Rolador } from '@/componentes/rolador';
+import { webhookDaMesa } from '@/lib/discord';
 import { clienteServidor, usuarioAtual } from '@/lib/supabase/servidor';
 import type { RegrasMesa } from '@/lib/supabase/tipos-banco';
 import { REGRAS_PADRAO } from '@/lib/fichas/regras-padrao';
 import { BotaoSair, PainelConvite } from './controles';
 import { MesaAoVivo } from './mesa-ao-vivo';
+import { PainelDiscord } from './painel-discord';
 import { PainelRegras } from './painel-regras';
 
 export default function PaginaMesa({ params }: PageProps<'/mesas/[id]'>) {
@@ -44,6 +46,8 @@ async function DetalheMesa({ params }: { params: Promise<{ id: string }> }) {
   const nomes = Object.fromEntries((membros ?? []).map((m) => [m.usuario_id, m.perfis?.nome || 'Sem nome']));
   const minhas = (grupo ?? []).filter((f) => f.dono_id === usuario.id && f.tipo === 'jogador');
   const regras: RegrasMesa = { ...REGRAS_PADRAO, ...(mesa.regras ?? {}) };
+  // só o Mestre pergunta (pelo servidor) se há webhook; a URL em si não sai daqui
+  const discordLigado = souMestre ? !!(await webhookDaMesa(mesa.id)) : false;
   // rolagens feitas aqui saem no nome do seu personagem ativo (se houver)
   const ativa = minhas.find((f) => f.ativa && f.tipo === 'jogador' && f.etapa === 'pronta');
 
@@ -65,6 +69,7 @@ async function DetalheMesa({ params }: { params: Promise<{ id: string }> }) {
 
       {souMestre && <PainelConvite mesaId={mesa.id} codigo={mesa.codigo_convite} />}
       {souMestre && <PainelRegras mesaId={mesa.id} regras={regras} />}
+      {souMestre && <PainelDiscord mesaId={mesa.id} configurado={discordLigado} />}
 
       <section className="caixa flex flex-col gap-3 p-4">
         <h2 className="rotulo">Membros · {membros?.length ?? 0}</h2>

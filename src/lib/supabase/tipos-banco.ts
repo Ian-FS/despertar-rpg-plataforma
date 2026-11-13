@@ -130,6 +130,12 @@ export type Database = {
         Update: Partial<FichaLinha>;
         Relationships: [];
       };
+      mesas_segredos: {
+        Row: { mesa_id: string; discord_webhook: string | null; atualizado_em: string };
+        Insert: { mesa_id: string; discord_webhook?: string | null; atualizado_em?: string };
+        Update: { discord_webhook?: string | null; atualizado_em?: string };
+        Relationships: [];
+      };
       fichas_publico: {
         Row: FichaPublicoLinha;
         Insert: { [_ in never]: never };

@@ -10,6 +10,7 @@ import {
   registrarRolagens,
   type ContextoMesa,
 } from '@/lib/fichas/contexto';
+import { enviarDiscord } from '@/lib/discord';
 import { clienteAdmin } from '@/lib/supabase/admin';
 import type { FichaLinha } from '@/lib/supabase/tipos-banco';
 import {
@@ -189,6 +190,9 @@ export async function iniciarCombateAcao(
 
     const { estado, linhas } = await aplicarAvanco(ctx, iniciarCombate(combatentes));
     await gravar(mesaId, estado, atual.versao);
+    enviarDiscord(mesaId, [
+      { nome: 'Sistema', texto: `⚔ **Combate iniciado.** Ordem: ${estado.combatentes.map((c) => `${c.nome} (${c.iniciativa})`).join(' → ')}` },
+    ]);
     return { linhas: ['Combate iniciado.', ...linhas] };
   });
 }
@@ -205,6 +209,7 @@ export async function proximaVezAcao(mesaId: string, vezEsperada: { uid: string;
     if (vezEsperada && (estado.vez?.uid !== vezEsperada.uid || estado.vez?.passada !== vezEsperada.passada)) return { erro: 'A vez já tinha passado.' };
     const r = await aplicarAvanco(ctx, proximaVez(estado));
     await gravar(mesaId, r.estado, versao);
+    if (r.estado.rodada !== estado.rodada) enviarDiscord(mesaId, [{ nome: 'Sistema', texto: `⚔ **Rodada ${r.estado.rodada}**` }]);
     return { linhas: r.linhas };
   });
 }
@@ -284,6 +289,7 @@ export async function encerrarCombateAcao(mesaId: string): Promise<ResultadoComb
       await gravarFicha(ficha.id, p);
     }
     await gravar(mesaId, COMBATE_VAZIO, versao);
+    enviarDiscord(mesaId, [{ nome: 'Sistema', texto: '⚔ **Combate encerrado.**' }]);
     return { linhas: ['Combate encerrado: efeitos ativos terminaram e os usos "por combate" foram liberados.'] };
   });
 }

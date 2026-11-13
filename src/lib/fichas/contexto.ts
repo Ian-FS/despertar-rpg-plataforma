@@ -1,5 +1,6 @@
 /* Carrega uma ficha com a permissão de quem pede. Toda ação de ficha passa por aqui. */
 import 'server-only';
+import { enviarDiscord, linhaRolagem } from '@/lib/discord';
 import { clienteAdmin } from '@/lib/supabase/admin';
 import { usuarioAtual } from '@/lib/supabase/servidor';
 import type { FichaLinha, RegrasMesa } from '@/lib/supabase/tipos-banco';
@@ -145,4 +146,9 @@ export async function registrarRolagens(
       })),
     );
   if (error) console.error('[rolagens] não foi possível registrar', error.message);
+  // rolagens públicas também vão para o canal do Discord da mesa (se o Mestre cadastrou o webhook)
+  if (!(secreta && ctx.souMestre)) {
+    const texto = itens.map((x) => linhaRolagem(x.rotulo, x.r, x.margemCritico)).join('\n');
+    enviarDiscord(ctx.mesaId, [{ nome: quem, texto }]);
+  }
 }

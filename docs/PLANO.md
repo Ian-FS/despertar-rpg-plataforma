@@ -146,7 +146,7 @@ Cada fase termina com algo que o grupo já usa. Trabalho em branches, uma por ta
 - [x] Campo de fórmula no registro da mesa (bandeja de dados visual fica para depois, se fizer falta)
 - [x] Ficha atualiza sozinha nas outras telas, com aviso do que o Mestre mudou
 - [ ] Chat da mesa
-- [ ] Webhook do Discord (rolagens públicas vão para o canal)
+- [x] Webhook do Discord por mesa (rolagens públicas e avisos de combate vão para o canal; a URL fica numa tabela que só o servidor lê)
 - [x] Painel do grupo (PV, PM, condições de todos), ao vivo
 - [x] Rastreador de combate: iniciativa, passadas, Pressão, turnos, Surpreso; o Início do turno das fichas dispara sozinho (inimigos rápidos com PV no próprio rastreador; NPC com ficha fica para a Fase 3)
 - [ ] Ataque × Reação conduzido (Defender/Esquivar, crítico, área = metade, Defesa Passiva e Defesa Fixa de Lacaios); o dano no alvo entra com a confirmação do Mestre
