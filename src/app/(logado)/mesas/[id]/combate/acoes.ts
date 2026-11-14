@@ -13,8 +13,10 @@ import {
 import { enviarDiscord } from '@/lib/discord';
 import { clienteAdmin } from '@/lib/supabase/admin';
 import type { FichaLinha } from '@/lib/supabase/tipos-banco';
+import { CATEGORIAS_AMEACA, iniAmeaca, nivelValido, statsAmeaca } from '@/regras/ameacas';
 import {
   COMBATE_VAZIO,
+  pressao,
   iniciarCombate,
   naVez,
   ordenar,
@@ -27,7 +29,9 @@ import {
 import { computarFicha } from '@/regras/ficha';
 import { aplicarEvento, type Evento } from '@/regras/gatilhos';
 import type { Personagem } from '@/regras/personagem';
-import { rolar, sortearCrypto } from '@/regras/rolagem';
+import { dobrarDados } from '@/regras/poderes';
+import { d20Natural, rolar, sortearCrypto } from '@/regras/rolagem';
+import type { CategoriaAmeaca } from '@/regras/tipos';
 import { normalizarPersonagem } from '@/regras/validacao';
 
 export interface ResultadoCombate {
@@ -38,13 +42,20 @@ export interface ResultadoCombate {
 
 export interface NovoInimigo {
   nome: string;
-  /** bônus de iniciativa (mod AGI) */
-  ini: number;
-  pv: number;
-  acoes: number;
+  /** bônus de iniciativa; ausente = metade do nível (ameaça) ou 0 */
+  ini?: number;
+  /** PV; ausente = o da tabela de ameaças */
+  pv?: number;
+  /** Ações Principais; ausente = o da tabela */
+  acoes?: number;
   surpreso?: boolean;
   /** quantos iguais (Lobo 1, Lobo 2…) */
   qtd?: number;
+  /** ameaça da tabela do capítulo 13: nível e categoria dão os números */
+  nivel?: number;
+  cat?: CategoriaAmeaca;
+  /** traços (bestiário ou do Mestre) */
+  traco?: string;
 }
 
 const ERRO_BANCO = 'O servidor não conseguiu acessar o banco. Tente de novo.';
@@ -146,8 +157,14 @@ async function criarInimigos(ctx: ContextoMesa, lista: NovoInimigo[]): Promise<C
   const marca = Date.now().toString(36);
   for (const [i, ini] of lista.entries()) {
     const qtd = Math.min(20, Math.max(1, Math.trunc(Number(ini.qtd) || 1)));
-    const bonus = Math.trunc(Number(ini.ini) || 0);
-    const pv = Math.max(1, Math.trunc(Number(ini.pv) || 1));
+    const cat = ini.cat && CATEGORIAS_AMEACA.includes(ini.cat) ? ini.cat : null;
+    const nivel = nivelValido(Number(ini.nivel));
+    const st = cat ? statsAmeaca(nivel, cat) : null;
+    const num = (v: unknown, padrao: number) => (v === undefined || v === null || v === '' || Number.isNaN(Number(v)) ? padrao : Math.trunc(Number(v)));
+    const bonus = num(ini.ini, cat ? iniAmeaca(nivel) : 0);
+    const pv = Math.max(1, num(ini.pv, st?.pv ?? 10));
+    const acoes = Math.min(10, Math.max(1, num(ini.acoes, st?.acoes ?? 1)));
+    const ameaca = st && cat ? { nivel, cat, atk: st.atk, reac: st.reac, defFixa: st.defFixa, dano: st.dano, rd: st.rd, cd: st.cd, res: st.res, traco: String(ini.traco ?? '').slice(0, 300) || undefined } : undefined;
     for (let n = 1; n <= qtd; n++) {
       const nome = (String(ini.nome ?? '').trim().slice(0, 40) || 'Inimigo') + (qtd > 1 ? ` ${n}` : '');
       const rol = rolar(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, sortearCrypto)!;
@@ -158,11 +175,12 @@ async function criarInimigos(ctx: ContextoMesa, lista: NovoInimigo[]): Promise<C
         tipo: 'inimigo',
         iniciativa: rol.total,
         desempate: bonus,
-        acoes: Math.min(6, Math.max(1, Math.trunc(Number(ini.acoes) || 1))),
+        acoes,
         reacoes: 0,
         surpreso: !!ini.surpreso,
         pv,
         pvMax: pv,
+        ameaca,
       });
     }
   }
@@ -235,11 +253,62 @@ export async function pvInimigoAcao(mesaId: string, uid: string, delta: number):
     exigirMestre(ctx);
     const { estado, versao } = await carregar(mesaId);
     const d = Math.trunc(Number(delta) || 0);
-    const combatentes = estado.combatentes.map((x) =>
-      x.uid === uid && x.tipo === 'inimigo' ? { ...x, pv: Math.min(x.pvMax ?? Infinity, (x.pv ?? 0) + d) } : x,
-    );
+    const linhas: string[] = [];
+    const combatentes = estado.combatentes.map((x) => {
+      if (x.uid !== uid || x.tipo !== 'inimigo') return x;
+      const pv = Math.min(x.pvMax ?? Infinity, (x.pv ?? 0) + d);
+      // Chefe: segunda fase aos 50% dos PV, com +1 Ação Principal (capítulo 13)
+      if (x.ameaca?.cat === 'Chefe' && !x.ameaca.fase2 && pv <= (x.pvMax ?? 0) / 2 && pv > 0) {
+        linhas.push(`${x.nome} entra na 2ª fase: +1 Ação Principal.`);
+        return { ...x, pv, acoes: x.acoes + 1, ameaca: { ...x.ameaca, fase2: true } };
+      }
+      if (pv <= 0 && (x.pv ?? 0) > 0) linhas.push(`${x.nome} caiu.`);
+      return { ...x, pv };
+    });
     await gravar(mesaId, { ...estado, combatentes }, versao);
-    return {};
+    if (linhas.length) enviarDiscord(mesaId, [{ nome: 'Sistema', texto: `⚔ ${linhas.join(' ')}` }]);
+    return { linhas };
+  });
+}
+
+export type RolagemInimigo = 'ataque' | 'reacao' | 'resistencia';
+
+/**
+ * O Mestre rola por um inimigo da tabela de ameaças: ataque (e dano), Reação (com a Pressão, e
+ * conta a Reação) ou Resistência. Lacaio não rola Reação: usa a Defesa Fixa.
+ */
+export async function rolarInimigoAcao(mesaId: string, uid: string, tipo: RolagemInimigo): Promise<ResultadoCombate> {
+  return tentar(async () => {
+    const ctx = await contextoMesa(mesaId);
+    exigirMestre(ctx);
+    const { estado, versao } = await carregar(mesaId);
+    const c = estado.combatentes.find((x) => x.uid === uid);
+    const a = c?.ameaca;
+    if (!estado.ativo || !c || !a) return { erro: 'Inimigo sem números da tabela de ameaças.' };
+    const d20 = (b: number) => `1d20${b >= 0 ? '+' : ''}${b}`;
+    if (tipo === 'ataque') {
+      const atk = rolar(d20(a.atk), sortearCrypto)!;
+      const nat = d20Natural(atk);
+      const itens = [{ rotulo: `Ataque${nat === 1 ? ' (1 natural: erra)' : ''}`, r: atk }];
+      if (nat !== 1) {
+        const crit = nat === 20;
+        itens.push({ rotulo: crit ? 'Dano (crítico)' : 'Dano', r: rolar(crit ? dobrarDados(a.dano) : a.dano, sortearCrypto)! });
+      }
+      await registrarRolagens(ctx, itens, false, c.nome);
+      return { linhas: [`${c.nome}: ataque ${atk.total}${itens[1] ? `, dano ${itens[1].r.total}` : ''}.`] };
+    }
+    if (tipo === 'resistencia') {
+      const r = rolar(d20(a.res), sortearCrypto)!;
+      await registrarRolagens(ctx, [{ rotulo: 'Resistência', r }], false, c.nome);
+      return { linhas: [`${c.nome}: Resistência ${r.total}.`] };
+    }
+    if (a.cat === 'Lacaio') return { linhas: [`${c.nome} é Lacaio: não rola Reação, usa a Defesa Fixa ${a.defFixa}.`] };
+    const pen = pressao(c);
+    const r = rolar(d20(a.reac + pen), sortearCrypto)!;
+    await registrarRolagens(ctx, [{ rotulo: `Reação${pen ? ` (Pressão ${pen})` : ''}`, r }], false, c.nome);
+    const combatentes = estado.combatentes.map((x) => (x.uid === uid ? { ...x, reacoes: x.reacoes + 1 } : x));
+    await gravar(mesaId, { ...estado, combatentes }, versao);
+    return { linhas: [`${c.nome}: Reação ${r.total}.`] };
   });
 }
 

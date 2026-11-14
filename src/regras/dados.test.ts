@@ -1,6 +1,6 @@
 /* Integridade dos dados portados do data.js. */
 import { describe, expect, it } from 'vitest';
-import { statsAmeaca } from './ameacas';
+import { gerarEncontro, statsAmeaca } from './ameacas';
 import { ARV, ARVORES, BESTIARIO, DESP, DESPERTARES, HAB, HABILIDADES, PERICIAS, TITULOS } from './dados';
 import { EFEITOS_DESP, EFEITOS_HAB } from './efeitos';
 
@@ -53,17 +53,32 @@ describe('outros dados', () => {
 });
 
 describe('ameaças (capítulo 13)', () => {
-  it('nível 5 bate com a tabela do livro', () => {
-    expect(statsAmeaca(5, 'Lacaio')).toMatchObject({ pv: 14, atk: 9, reac: 8, defFixa: 18, dano: '1d6+5', cd: 16, res: 7 });
+  it('nível 5 (revisão 2: +2 × Bônus de Rank no ataque e na Reação; Chefe 50 + 35 × nível PV)', () => {
+    expect(statsAmeaca(5, 'Lacaio')).toMatchObject({ pv: 14, atk: 11, reac: 10, defFixa: 20, dano: '1d6+5', cd: 16, res: 7 });
     expect(statsAmeaca(5, 'Soldado')).toMatchObject({ pv: 40, dano: '1d8+7', acoes: 1, rd: 0 });
     expect(statsAmeaca(5, 'Elite')).toMatchObject({ pv: 80, dano: '2d8+7', acoes: 1, rd: 1 });
-    expect(statsAmeaca(5, 'Chefe')).toMatchObject({ pv: 175, dano: '3d8+10', acoes: 2, rd: 1 });
+    expect(statsAmeaca(5, 'Chefe')).toMatchObject({ pv: 225, dano: '3d8+10', acoes: 2, rd: 1 });
+    // nível 1–4 não tem Bônus de Rank: igual ao livro antigo
+    expect(statsAmeaca(1, 'Lacaio')).toMatchObject({ pv: 6, atk: 3, reac: 2, defFixa: 12, cd: 11, res: 1 });
   });
 
   it('bestiário: Orc Berserker e Dragão Ancião', () => {
     const orc = BESTIARIO.find((b) => b.n === 'Orc Berserker')!;
-    expect(statsAmeaca(orc.L, orc.cat)).toMatchObject({ pv: 116, atk: 14, reac: 13, dano: '2d8+12', acoes: 2, rd: 1, cd: 20, res: 12 });
+    expect(statsAmeaca(orc.L, orc.cat)).toMatchObject({ pv: 116, atk: 16, reac: 15, dano: '2d8+12', acoes: 2, rd: 1, cd: 20, res: 12 });
     const dragao = BESTIARIO.find((b) => b.n === 'Dragão Ancião')!;
-    expect(statsAmeaca(dragao.L, dragao.cat)).toMatchObject({ pv: 800, atk: 47, reac: 46, dano: '3d8+60', acoes: 7, rd: 7, cd: 50, res: 45 });
+    expect(statsAmeaca(dragao.L, dragao.cat)).toMatchObject({ pv: 1100, atk: 59, reac: 58, dano: '3d8+60', acoes: 7, rd: 7, cd: 50, res: 45 });
+  });
+
+  it('encontros do livro para 4 Jogadores, ajustando 1 inimigo por Jogador a mais ou a menos', () => {
+    expect(gerarEncontro('Médio', 5)).toEqual([
+      { cat: 'Soldado', nivel: 5, qtd: 3 },
+      { cat: 'Lacaio', nivel: 5, qtd: 4 },
+    ]);
+    expect(gerarEncontro('Chefe', 5, 3)).toEqual([
+      { cat: 'Chefe', nivel: 7, qtd: 1 },
+      { cat: 'Elite', nivel: 5, qtd: 1 },
+    ]);
+    expect(gerarEncontro('Fácil', 30, 6)[0]).toEqual({ cat: 'Lacaio', nivel: 30, qtd: 8 });
+    expect(gerarEncontro('Difícil', 30)[0].nivel).toBe(30); // não passa do 30
   });
 });

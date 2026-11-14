@@ -4,7 +4,10 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useEfeitos } from '@/componentes/efeitos/provedor';
 import type { FichaPublicoLinha, ResumoFicha } from '@/lib/supabase/tipos-banco';
+import { CATEGORIAS_AMEACA, DIFICULDADES, gerarEncontro, iniAmeaca, monstro, nivelValido, statsAmeaca, type Dificuldade } from '@/regras/ameacas';
 import { naVez, pressao, sequencia, type Combatente, type EstadoCombate } from '@/regras/combate';
+import { BESTIARIO } from '@/regras/dados';
+import type { CategoriaAmeaca } from '@/regras/tipos';
 import {
   adicionarCombatenteAcao,
   encerrarCombateAcao,
@@ -13,6 +16,7 @@ import {
   pvInimigoAcao,
   reacaoAcao,
   removerCombatenteAcao,
+  rolarInimigoAcao,
   type NovoInimigo,
   type ResultadoCombate,
 } from './acoes';
@@ -151,6 +155,7 @@ function CombateAtivo({ mesaId, estado, recarregar, grupo, souMestre, usuarioId 
                   {c.tipo === 'ficha' && r?.condicoes ? ` · ${r.condicoes}` : ''}
                 </span>
                 {c.tipo === 'inimigo' && <BarraPV pv={c.pv ?? 0} max={c.pvMax ?? 1} numeros={souMestre} />}
+                {souMestre && c.ameaca && <FichaInimigo mesaId={mesaId} c={c} recarregar={recarregar} />}
               </span>
               <span className="flex items-center gap-1 text-xs" title="Pressão: cada Defender ou Esquivar depois do primeiro na rodada sofre −2 (no máximo −6). Zera no início do turno.">
                 <span className={pen < 0 ? 'text-perigo' : 'text-apagado'}>
@@ -305,45 +310,148 @@ function AjustePV({ mesaId, c }: { mesaId: string; c: Combatente }) {
   );
 }
 
-const inimigoVazio = (): NovoInimigo => ({ nome: '', ini: 0, pv: 10, acoes: 1, qtd: 1, surpreso: false });
+const inimigoVazio = (): NovoInimigo => ({ nome: '', nivel: 1, cat: 'Soldado', qtd: 1, surpreso: false });
 
-/** Linha de cadastro rápido de inimigo (nome, bônus de iniciativa, PV, ações, quantidade). */
+/** Inimigo da tabela de ameaças (capítulo 13): escolha do bestiário, ou nível + categoria. PV e iniciativa podem ser trocados. */
 function LinhaInimigo({ v, onChange, onRemover }: { v: NovoInimigo; onChange: (v: NovoInimigo) => void; onRemover?: () => void }) {
-  // guarda o texto como foi digitado ("-", "") e o servidor converte; assim dá para digitar negativos
+  // guarda o texto como foi digitado ("-", "") e o servidor converte; vazio = valor da tabela
   const num = (k: keyof NovoInimigo) => (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...v, [k]: e.target.value.replace(/[^\d-]/g, '') as unknown as number });
+  const nivel = nivelValido(Number(v.nivel));
+  const cat = v.cat ?? 'Soldado';
+  const st = statsAmeaca(nivel, cat);
+  const doBestiario = (nome: string) => {
+    const m = monstro(nome);
+    if (m) onChange({ ...v, nome: m.n, nivel: m.L, cat: m.cat, traco: m.tr, pv: undefined, ini: undefined });
+  };
+  return (
+    <div className="flex flex-col gap-1 border-l-2 border-linha pl-2 text-xs">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1">
+          Bestiário
+          <select className="campo w-40" value="" onChange={(e) => doBestiario(e.target.value)}>
+            <option value="">— escolher —</option>
+            {BESTIARIO.map((m) => (
+              <option key={m.n} value={m.n}>
+                {m.r} · {m.n} (nv {m.L}, {m.cat})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          Nome
+          <input className="campo w-32" value={v.nome} onChange={(e) => onChange({ ...v, nome: e.target.value })} placeholder="Orc" />
+        </label>
+        <label className="flex flex-col gap-1">
+          Nível
+          <input className="campo w-14" inputMode="numeric" value={v.nivel ?? ''} onChange={num('nivel')} />
+        </label>
+        <label className="flex flex-col gap-1">
+          Categoria
+          <select className="campo" value={cat} onChange={(e) => onChange({ ...v, cat: e.target.value as CategoriaAmeaca, pv: undefined })}>
+            {CATEGORIAS_AMEACA.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          Qtd.
+          <input className="campo w-14" inputMode="numeric" value={v.qtd ?? ''} onChange={num('qtd')} />
+        </label>
+        <label className="flex flex-col gap-1">
+          PV
+          <input className="campo w-16" inputMode="numeric" value={v.pv ?? ''} onChange={num('pv')} placeholder={String(st.pv)} />
+        </label>
+        <label className="flex flex-col gap-1" title="O livro não dá iniciativa para monstros: a plataforma usa metade do nível">
+          Inic.
+          <input className="campo w-14" inputMode="numeric" value={v.ini ?? ''} onChange={num('ini')} placeholder={`+${iniAmeaca(nivel)}`} />
+        </label>
+        <label className="flex items-center gap-1 pb-2">
+          <input type="checkbox" checked={!!v.surpreso} onChange={(e) => onChange({ ...v, surpreso: e.target.checked })} />
+          Surpreso
+        </label>
+        {onRemover && (
+          <button className="pb-2 text-apagado hover:text-perigo" onClick={onRemover} aria-label="Tirar inimigo da lista">
+            ✕
+          </button>
+        )}
+      </div>
+      <span className="font-mono text-apagado">{textoAmeaca({ ...st, pv: Number(v.pv) || st.pv, cat })}</span>
+      {v.traco && <span className="text-apagado">{v.traco}</span>}
+    </div>
+  );
+}
+
+/** "PV 40 · Ataque +11 · Reação +10 · Dano 1d8+7 · Ações 1 · RD 0 · CD 16 · Resist. +7" */
+const textoAmeaca = (a: { pv?: number; atk: number; reac: number; defFixa: number; dano: string; acoes?: number; rd: number; cd: number; res: number; cat: CategoriaAmeaca }) =>
+  [
+    a.pv !== undefined ? `PV ${a.pv}` : null,
+    `Ataque +${a.atk}`,
+    a.cat === 'Lacaio' ? `Defesa Fixa ${a.defFixa}` : `Reação +${a.reac}`,
+    `Dano ${a.dano}`,
+    a.acoes !== undefined ? `Ações ${a.acoes}` : null,
+    `RD ${a.rd}`,
+    `CD ${a.cd}`,
+    `Resist. +${a.res}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+/** Gera os inimigos pela tabela de encontros do livro (feita para 4 Jogadores de nível N). */
+function GerarEncontro({ nivelGrupo, jogadores, onGerar }: { nivelGrupo: number; jogadores: number; onGerar: (l: NovoInimigo[]) => void }) {
+  const [dif, setDif] = useState<Dificuldade>('Médio');
+  const [nivel, setNivel] = useState(String(nivelGrupo));
   return (
     <div className="flex flex-wrap items-end gap-2 text-xs">
       <label className="flex flex-col gap-1">
-        Nome
-        <input className="campo w-32" value={v.nome} onChange={(e) => onChange({ ...v, nome: e.target.value })} placeholder="Orc" />
+        Encontro
+        <select className="campo" value={dif} onChange={(e) => setDif(e.target.value as Dificuldade)}>
+          {DIFICULDADES.map((d) => (
+            <option key={d}>{d}</option>
+          ))}
+        </select>
       </label>
       <label className="flex flex-col gap-1">
-        Inic. (bônus)
-        <input className="campo w-16" inputMode="numeric" value={v.ini} onChange={num('ini')} />
+        Nível do grupo
+        <input className="campo w-14" inputMode="numeric" value={nivel} onChange={(e) => setNivel(e.target.value.replace(/\D/g, ''))} />
       </label>
-      <label className="flex flex-col gap-1">
-        PV
-        <input className="campo w-16" inputMode="numeric" value={v.pv} onChange={num('pv')} />
-      </label>
-      <label className="flex flex-col gap-1">
-        Ações
-        <input className="campo w-14" inputMode="numeric" value={v.acoes} onChange={num('acoes')} />
-      </label>
-      <label className="flex flex-col gap-1">
-        Qtd.
-        <input className="campo w-14" inputMode="numeric" value={v.qtd} onChange={num('qtd')} />
-      </label>
-      <label className="flex items-center gap-1 pb-2">
-        <input type="checkbox" checked={!!v.surpreso} onChange={(e) => onChange({ ...v, surpreso: e.target.checked })} />
-        Surpreso
-      </label>
-      {onRemover && (
-        <button className="pb-2 text-apagado hover:text-perigo" onClick={onRemover} aria-label="Tirar inimigo da lista">
-          ✕
-        </button>
-      )}
+      <button
+        className="botao botao-discreto px-2 py-1 text-xs"
+        onClick={() => onGerar(gerarEncontro(dif, Number(nivel) || 1, jogadores).map((g) => ({ nome: g.cat, nivel: g.nivel, cat: g.cat, qtd: g.qtd, surpreso: false })))}
+        title="Substitui a lista de inimigos abaixo; depois dê nomes e ajuste"
+      >
+        Gerar ({jogadores} jogador{jogadores === 1 ? '' : 'es'})
+      </button>
     </div>
+  );
+}
+
+/** Números e rolagens de um inimigo da tabela de ameaças (só o Mestre vê). */
+function FichaInimigo({ mesaId, c, recarregar }: { mesaId: string; c: Combatente; recarregar: () => void }) {
+  const { ocupado, executar } = useAcaoCombate(recarregar);
+  const a = c.ameaca!;
+  const botao = 'border border-linha px-1.5 py-0.5 hover:border-sys disabled:opacity-40';
+  return (
+    <span className="mt-1 flex flex-col gap-1">
+      <span className="font-mono text-xs text-apagado">
+        nv {a.nivel} {a.cat}
+        {a.fase2 ? ' · 2ª fase' : ''} · {textoAmeaca(a)}
+      </span>
+      {a.traco && <span className="text-xs text-apagado">{a.traco}</span>}
+      <span className="flex flex-wrap gap-1 text-xs">
+        <button className={botao} disabled={ocupado} onClick={() => executar(() => rolarInimigoAcao(mesaId, c.uid, 'ataque'))}>
+          Atacar
+        </button>
+        {a.cat !== 'Lacaio' && (
+          <button className={botao} disabled={ocupado} onClick={() => executar(() => rolarInimigoAcao(mesaId, c.uid, 'reacao'))} title="Rola a Reação com a Pressão e conta a Reação">
+            Reagir{pressao(c) ? ` (${pressao(c)})` : ''}
+          </button>
+        )}
+        <button className={botao} disabled={ocupado} onClick={() => executar(() => rolarInimigoAcao(mesaId, c.uid, 'resistencia'))}>
+          Resistência
+        </button>
+      </span>
+    </span>
   );
 }
 
@@ -354,6 +462,10 @@ function NovoCombate({ mesaId, grupo, recarregar }: { mesaId: string; grupo: Fic
   const [inimigos, setInimigos] = useState<NovoInimigo[]>([inimigoVazio()]);
   const [aberto, setAberto] = useState(false);
   const marcada = (id: string) => escolhidas[id]?.on ?? true;
+  const marcadas = prontas.filter((g) => marcada(g.id));
+  const nMarcadas = marcadas.length;
+  // nível do grupo para o gerador: a média dos personagens marcados
+  const nivelGrupo = Math.max(1, Math.round(marcadas.reduce((t, g) => t + ((g.resumo as Partial<ResumoFicha>).nivel ?? 1), 0) / Math.max(1, nMarcadas)));
 
   if (!aberto)
     return (
@@ -403,6 +515,7 @@ function NovoCombate({ mesaId, grupo, recarregar }: { mesaId: string; grupo: Fic
       </div>
       <div className="flex flex-col gap-2">
         <span className="rotulo">Inimigos</span>
+        <GerarEncontro nivelGrupo={nivelGrupo} jogadores={Math.max(1, nMarcadas)} onGerar={setInimigos} />
         {inimigos.map((v, i) => (
           <LinhaInimigo
             key={i}
@@ -414,7 +527,7 @@ function NovoCombate({ mesaId, grupo, recarregar }: { mesaId: string; grupo: Fic
         <button className="self-start text-xs text-sys hover:underline" onClick={() => setInimigos((l) => [...l, inimigoVazio()])}>
           + Outro tipo de inimigo
         </button>
-        <span className="text-xs text-apagado">Inimigo sem nome fica de fora. Iniciativa = 1d20 + bônus, rolada no registro da mesa.</span>
+        <span className="text-xs text-apagado">Inimigo sem nome fica de fora. PV e iniciativa vazios usam a tabela. Iniciativa = 1d20 + bônus, rolada no registro da mesa.</span>
       </div>
       <div className="flex gap-2">
         <button className="botao" disabled={ocupado} onClick={iniciar}>

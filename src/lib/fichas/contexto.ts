@@ -128,9 +128,11 @@ export async function registrarRolagens(
   ctx: ContextoMesa & { ficha?: FichaLinha },
   itens: ItemRolagem[],
   secreta = false,
+  /** nome no registro no lugar do personagem/pessoa (ex.: um inimigo rolado pelo Mestre) */
+  comoQuem?: string,
 ) {
   if (!itens.length) return;
-  const quem = await nomeNoRegistro(ctx, ctx.ficha);
+  const quem = comoQuem ? `${comoQuem.slice(0, 60)} · Mestre` : await nomeNoRegistro(ctx, ctx.ficha);
   const { error } = await clienteAdmin()
     .from('rolagens')
     .insert(

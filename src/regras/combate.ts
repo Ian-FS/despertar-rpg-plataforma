@@ -5,6 +5,8 @@
    - Surpreso: não age nem reage na primeira rodada.
    Puro: o servidor rola os dados, grava e dispara o "Início do turno" das fichas. */
 
+import type { CategoriaAmeaca } from './tipos';
+
 export interface Combatente {
   uid: string;
   nome: string;
@@ -24,6 +26,25 @@ export interface Combatente {
   /** inimigos: PV controlados no rastreador */
   pv?: number;
   pvMax?: number;
+  /** inimigos da tabela de ameaças: números para o Mestre rolar no rastreador */
+  ameaca?: FichaAmeaca;
+}
+
+/** Números de uma ameaça (capítulo 13) guardados no combate. */
+export interface FichaAmeaca {
+  nivel: number;
+  cat: CategoriaAmeaca;
+  atk: number;
+  reac: number;
+  defFixa: number;
+  dano: string;
+  rd: number;
+  cd: number;
+  res: number;
+  /** traços do bestiário ou anotados pelo Mestre */
+  traco?: string;
+  /** Chefe: já entrou na 2ª fase (50% dos PV, +1 Ação Principal) */
+  fase2?: boolean;
 }
 
 export interface Vez {

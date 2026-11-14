@@ -84,3 +84,12 @@ O `data.js` foi reimportado pelo script (`node scripts/importar-data-js.mjs <dat
 - **Imortal Menor** (Forma do Sangue Fervente) passou a ser automático: ao cair a 0 PV, volta a 25%, 1× por dia.
 
 O `regras.md` do repositório é o texto do PDF antigo. O livro atualizado está no site; as regras acima já estão no código.
+
+## Ameaças no combate (decidido em 14/11/2026)
+
+- **Tabela de ameaças** atualizada pela revisão 2: ataque e Reação somam 2 × o Bônus de Rank da faixa de nível (0 até o nível 4, 1 do 5 ao 9… 6 do 25 ao 30) e o Chefe tem 50 + 35 × nível PV. O bestiário rápido do `regras.md` antigo ainda mostra os números de antes.
+- **Iniciativa de monstro**: o livro não dá uma (monstros não têm AGI). A plataforma usa **1d20 + metade do nível**; o Mestre pode trocar o bônus ao montar o combate.
+- **Rolagens do inimigo** (Atacar, Reagir, Resistência) são públicas no registro: o jogador precisa do total do ataque para escolher a Reação. 20 natural dobra os dados do dano; 1 natural erra.
+- **Lacaio** não rola Reação: o rastreador mostra a Defesa Fixa (10 + Reação).
+- **Chefe**: ao chegar a 50% dos PV pelo campo de Dano, entra na 2ª fase com +1 Ação Principal, uma vez.
+- **Gerador de encontros**: a tabela do livro é para 4 Jogadores; para cada Jogador a mais ou a menos, o grupo mais numeroso ganha ou perde 1 inimigo.

@@ -156,7 +156,8 @@ Cada fase termina com algo que o grupo já usa. Trabalho em branches, uma por ta
 
 ### Fase 3 — Ferramentas do Mestre
 - [ ] Painel do Mestre: ver e editar todas as fichas, criar NPCs
-- [ ] Gerador de ameaças pela tabela de níveis 1–30 e bestiário da mesa
+- [x] Gerador de ameaças pela tabela de níveis 1–30, bestiário rápido e gerador de encontros, ligados ao rastreador (o Mestre rola ataque, Reação e Resistência de cada inimigo)
+- [ ] Bestiário próprio da mesa (ameaças criadas pelo Mestre e guardadas)
 - [ ] Gerador de Portal e gerador de saque (raridade, afixos, Selos)
 - [ ] Concluir Portal: XP (com multiplicadores), Ouro e itens para o grupo
 - [ ] Notificações do Sistema na tela dos jogadores (missões diárias, de emergência, ocultas)
