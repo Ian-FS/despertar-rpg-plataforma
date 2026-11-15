@@ -129,6 +129,7 @@ function CombateAtivo({ mesaId, estado, recarregar, grupo, souMestre, usuarioId 
                   {c.nome}
                 </span>
                 <span className="font-mono text-xs text-apagado">{passada}ª ação</span>
+                {souMestre && c.ameaca && <BotaoAtacar mesaId={mesaId} c={c} recarregar={recarregar} />}
               </li>
             );
           const r = resumoDe(c);
@@ -423,6 +424,16 @@ function GerarEncontro({ nivelGrupo, jogadores, onGerar }: { nivelGrupo: number;
         Gerar ({jogadores} jogador{jogadores === 1 ? '' : 'es'})
       </button>
     </div>
+  );
+}
+
+/** Atacar de novo nas ações seguintes do inimigo (2ª, 3ª passada). */
+function BotaoAtacar({ mesaId, c, recarregar }: { mesaId: string; c: Combatente; recarregar: () => void }) {
+  const { ocupado, executar } = useAcaoCombate(recarregar);
+  return (
+    <button className="border border-linha px-1.5 py-0.5 text-xs hover:border-sys disabled:opacity-40" disabled={ocupado} onClick={() => executar(() => rolarInimigoAcao(mesaId, c.uid, 'ataque'))}>
+      Atacar
+    </button>
   );
 }
 
